@@ -22,7 +22,8 @@ def randomize_domain(name):
 class RedisBuffer(list):
 
     CREATE = 1
-    UPDATE = 2
+    UPDATE = 1
+    CREATE_RECORDSETS = 1
 
     def flush(self, client):
         """Write everything stored in this buffer to redis."""
@@ -38,13 +39,17 @@ class RedisBuffer(list):
 
         response_json = response.json().get('zone')
         zone_name = response_json['name']
-        serial = response_json['serial']
+        serial = response_json['serial']        
+        response_json_rec = response.json().get('recordset')
+
 
         key = "api-{0}-{1}".format(zone_name, serial)
         if type == self.CREATE:
             value = response_json['created_at']
         elif type == self.UPDATE:
             value = response_json['updated_at']
+        elif type == self.CREATE_RECORDSETS:
+            value = response_json_rec['created_at']
         else:
             print "ERORORORR"
             return False
@@ -119,7 +124,36 @@ class MyTaskSet(TaskSet):
         update_resp = self.client.patch(url, data=json.dumps(payload), headers=headers)
         if update_resp.status_code == 200:
             self.buffer.append((self.buffer.UPDATE, update_resp))
+       
+    @task
+    def recordset_create(self):
+        if not self.buffer:
+            return
 
+        i = random.randrange(0, len(self.buffer))
+        _, response = self.buffer[i]
+
+        response_json = response.json().get('zone')
+        print "response_json", response_json
+        zone_id = response_json['id']
+        zone_name = response_json['name']
+        rec_ip = ".".join(map(str, (random.randint(0, 255) 
+                        for _ in range(4))))
+        payload ={"recordset" : {"name" : zone_name,
+                                 "type" : "A",
+                                 "ttl" : 3600
+                                 "records" : [ 
+                                  rec_ip ] }
+                                }
+
+        headers = {"content-type": "application/json"}
+
+        url = "/zones/{0}/recordsets".format(zone_id)
+        recordset_resp = self.client.post(url, data=json.dumps(payload), headers=headers)
+        if response.status_code == 201:
+            self.buffer.append((self.buffer.CREATE_RECORDSETS, recordset_resp))
+    
+            
     def on_quit(self):
         print "on_quit: Flushing buffer"
         client = redis.StrictRedis(host='localhost', port=6379)
