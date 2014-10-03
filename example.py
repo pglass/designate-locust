@@ -2,7 +2,6 @@ from locust import HttpLocust, TaskSet, task
 import locust.events
 from faker import Factory
 import json
-import pprint
 import datetime
 import random
 import redis
@@ -41,7 +40,7 @@ class RedisBuffer(list):
         """Store a key-value pair in redis where the key contains the
         zone name and serial number, and the value is the timestamp of the
         create or update corresponding to that serial."""
-        print "Store: ", item
+        print "Store: ", item[0], item[1].json()
         type, response = item
 
         response_json = response.json().get('zone')
@@ -139,7 +138,7 @@ class MyTaskSet(TaskSet):
             zone_resp = self.designate_client.get_zone(zone_id)
             if zone_resp.status_code == 200:
                 print "adding zone_resp:", zone_resp.json()
-                self.buffer.append((self.buffer.CREATE, zone_resp))
+                self.buffer.append((self.buffer.UPDATE, zone_resp))
 
     def on_start(self):
         # ensure a server exists
@@ -155,6 +154,19 @@ class MyTaskSet(TaskSet):
                                          "zone_recordsets": 999999999}}))
 
     def on_quit(self):
+        # CTRL-C will bring us here. It's possible there's a task that has not
+        # yet finished. Using the `-n` flag to limit the total number of
+        # requests means any additional requests will fail and cleanup won't
+        # work right...
+
+        # delete all created zones
+        print "on_quit: Deleting created zones"
+        created_responses = (resp for type, resp in self.buffer if type == self.buffer.CREATE)
+        for resp in created_responses:
+            zone_id = resp.json().get("zone")['id']
+            self.designate_client.delete_zone(zone_id)
+
+        # write all data to redis
         print "on_quit: Flushing buffer"
         client = redis.StrictRedis(host='localhost', port=6379)
         self.buffer.flush(client)
