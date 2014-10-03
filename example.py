@@ -77,30 +77,6 @@ class MyTaskSet(TaskSet):
         self.fake = Factory.create()
         locust.events.quitting += lambda: self.on_quit()
 
-    #@task
-    #def index(self):
-    #    response = self.client.get("/zones")
-    #    print "Response status code:", response.status_code
-    #    #  print "Response content:", response.content
-    #    serialized_str = response.content
-    #    response_json = json.loads(serialized_str)
-    #    resp = response_json.get('zones')
-    #    # pprint.pprint(resp)
-    #    name  = resp[0]['name']
-    #    serial = resp[0]['serial']
-    #    id = resp[0]['id']
-    #    created_at =resp[0]['created_at']
-
-    #    print id
-    #    print serial
-    #    print created_at
-    #    print name
-    #    '''
-    #    name = response_json.get('zones').get(name)
-    #    id = response_json.get('zones').get(id)
-    #    created = response_json.get('zones').get(created_at)
-    #    '''
-
     @task
     def zone_post(self):
         name = randomize(self.fake.first_name())
@@ -164,6 +140,19 @@ class MyTaskSet(TaskSet):
             if zone_resp.status_code == 200:
                 print "adding zone_resp:", zone_resp.json()
                 self.buffer.append((self.buffer.CREATE, zone_resp))
+
+    def on_start(self):
+        # ensure a server exists
+        server_name = "ns.{0}.com.".format(randomize(self.fake.first_name()))
+        self.designate_client.post_server(data=json.dumps(
+            { "name": server_name }))
+
+        # ensure we won't reach quota limits
+        self.designate_client.patch_quotas(tenant='noauth-project',
+            data=json.dumps({ "quota": { "zones": 999999999,
+                                         "recordset_records": 999999999,
+                                         "zone_records": 999999999,
+                                         "zone_recordsets": 999999999}}))
 
     def on_quit(self):
         print "on_quit: Flushing buffer"

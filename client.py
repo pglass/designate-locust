@@ -1,7 +1,7 @@
 from locust import TaskSet
 
 class DesignateClient(object):
-    """Extends a normal TaskSet client with Designate specifc http requests."""
+    """Extends a normal client with Designate specific http requests."""
 
     _HEADERS = {
         "Content-Type": "application/json",
@@ -17,11 +17,26 @@ class DesignateClient(object):
         kwargs['headers'] = kwargs.get('headers') or headers
 
     #############################################
+    # Server calls
+    #############################################
+    def post_server(self, *args, **kwargs):
+        self._add_headers(kwargs)
+        self.client.post("/v1/servers", *args, **kwargs)
+
+    #############################################
+    # Quotas calls
+    #############################################
+    def patch_quotas(self, tenant, *args, **kwargs):
+        self._add_headers(kwargs)
+        url = "/v2/quotas/{0}".format(tenant)
+        self.client.patch(url, *args, **kwargs)
+
+    #############################################
     # Zone calls
     #############################################
     def get_zone(self, zone_id, *args, **kwargs):
-        url = "/v2/zones/{0}".format(zone_id)
         self._add_headers(kwargs)
+        url = "/v2/zones/{0}".format(zone_id)
         return self.client.get(url, *args, **kwargs)
 
     def list_zones(self, *args, **kwargs):
