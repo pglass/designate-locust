@@ -7,6 +7,7 @@ import datetime
 import random
 import redis
 
+
 def get_timestamp():
     return str(datetime.datetime.now())
 
@@ -39,7 +40,7 @@ class RedisBuffer(list):
 
         response_json = response.json().get('zone')
         zone_name = response_json['name']
-        serial = response_json['serial']        
+        serial = response_json['serial']
         response_json_rec = response.json().get('recordset')
 
 
@@ -124,7 +125,7 @@ class MyTaskSet(TaskSet):
         update_resp = self.client.patch(url, data=json.dumps(payload), headers=headers)
         if update_resp.status_code == 200:
             self.buffer.append((self.buffer.UPDATE, update_resp))
-       
+
     @task
     def recordset_create(self):
         if not self.buffer:
@@ -137,12 +138,12 @@ class MyTaskSet(TaskSet):
         print "response_json", response_json
         zone_id = response_json['id']
         zone_name = response_json['name']
-        rec_ip = ".".join(map(str, (random.randint(0, 255) 
+        rec_ip = ".".join(map(str, (random.randint(0, 255)
                         for _ in range(4))))
         payload ={"recordset" : {"name" : zone_name,
                                  "type" : "A",
                                  "ttl" : 3600,
-                                 "records" : [ 
+                                 "records" : [
                                   rec_ip ] }
                                 }
 
@@ -152,8 +153,8 @@ class MyTaskSet(TaskSet):
         recordset_resp = self.client.post(url, data=json.dumps(payload), headers=headers)
         if response.status_code == 201:
             self.buffer.append((self.buffer.CREATE_RECORDSETS, recordset_resp))
-    
-            
+
+
     def on_quit(self):
         print "on_quit: Flushing buffer"
         client = redis.StrictRedis(host='localhost', port=6379)
