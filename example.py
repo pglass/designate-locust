@@ -22,8 +22,8 @@ def randomize_domain(name):
 class RedisBuffer(list):
 
     CREATE = 1
-    UPDATE = 1
-    CREATE_RECORDSETS = 1
+    UPDATE = 2
+    CREATE_RECORDSETS = 3
 
     def flush(self, client):
         """Write everything stored in this buffer to redis."""
@@ -141,7 +141,7 @@ class MyTaskSet(TaskSet):
                         for _ in range(4))))
         payload ={"recordset" : {"name" : zone_name,
                                  "type" : "A",
-                                 "ttl" : 3600
+                                 "ttl" : 3600,
                                  "records" : [ 
                                   rec_ip ] }
                                 }
