@@ -7,6 +7,7 @@ import random
 import redis
 
 from client import DesignateClient
+from config import RedisConfig
 
 
 def get_timestamp():
@@ -34,13 +35,13 @@ class RedisBuffer(list):
         while self:
             item = self.pop()
             if not self._store_item(item, client):
-                print "Failed to store:", item
+                print "Failed to store: ", item[0], item[1].json()
 
     def _store_item(self, item, client):
         """Store a key-value pair in redis where the key contains the
         zone name and serial number, and the value is the timestamp of the
         create or update corresponding to that serial."""
-        print "Store: ", item[0], item[1].json()
+        # print "Store: ", item[0], item[1].json()
         type, response = item
 
         response_json = response.json().get('zone')
@@ -62,7 +63,6 @@ class RedisBuffer(list):
         """Return a random item in this list, or None if empty."""
         if not self:
             return None
-
         i = random.randrange(0, len(self))
         return self[i]
 
@@ -74,6 +74,7 @@ class MyTaskSet(TaskSet):
         self.designate_client = DesignateClient(self.client)
         self.buffer = RedisBuffer()
         self.fake = Factory.create()
+        self.redis_config = RedisConfig()
         locust.events.quitting += lambda: self.on_quit()
 
     @task
@@ -135,14 +136,11 @@ class MyTaskSet(TaskSet):
         if recordset_resp.status_code == 201:
             zone_resp = self.designate_client.get_zone(zone_id)
             if zone_resp.status_code == 200:
-                print "adding zone_resp:", zone_resp.json()
+                # print "adding zone_resp:", zone_resp.json()
                 self.buffer.append((self.buffer.UPDATE, zone_resp))
 
     def on_start(self):
-        # ensure a server exists
-        server_name = "ns.{0}.com.".format(randomize(self.fake.first_name()))
-        self.designate_client.post_server(data=json.dumps(
-            { "name": server_name }))
+        # assume a server already exists
 
         # ensure we won't reach quota limits
         self.designate_client.patch_quotas(tenant='noauth-project',
@@ -157,16 +155,12 @@ class MyTaskSet(TaskSet):
         # requests means any additional requests will fail and cleanup won't
         # work right...
 
-        # delete all created zones
-        print "on_quit: Deleting created zones"
-        created_responses = (resp for type, resp in self.buffer if type == self.buffer.CREATE)
-        for resp in created_responses:
-            zone_id = resp.json().get("zone")['id']
-            self.designate_client.delete_zone(zone_id)
-
         # write all data to redis
         print "on_quit: Flushing buffer"
-        client = redis.StrictRedis(host='162.242.231.206', port=6379, db=0)
+        client = redis.StrictRedis(host=self.redis_config.host,
+                                   port=self.redis_config.port,
+                                   password=self.redis_config.password,
+                                   db=0)
         self.buffer.flush(client)
 
 
