@@ -128,10 +128,8 @@ class MyTaskSet(TaskSet):
                                   "ttl" : 3600,
                                   "records" : [ random_ip() ] }}
 
-        print "recordset payload:", payload
         recordset_resp = self.designate_client.post_recordset(
             zone_id, data=json.dumps(payload))
-        print "recordset_resp:", recordset_resp.json()
 
         # store the updated zone's response which contains the updated serial
         if recordset_resp.status_code == 201:
@@ -168,7 +166,7 @@ class MyTaskSet(TaskSet):
 
         # write all data to redis
         print "on_quit: Flushing buffer"
-        client = redis.StrictRedis(host='localhost', port=6379)
+        client = redis.StrictRedis(host='162.242.231.206', port=6379, db=0)
         self.buffer.flush(client)
 
 
@@ -177,5 +175,5 @@ class MyLocust(HttpLocust):
     # in milliseconds
     min_wait = 100
     max_wait = 1000
-    # defines the server running the web ui
+    # defines the designate endpoint
     host="http://23.253.149.85"
