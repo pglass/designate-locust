@@ -74,7 +74,15 @@ class MyTaskSet(TaskSet):
         self.designate_client = DesignateClient(self.client)
         self.buffer = RedisBuffer()
         self.fake = Factory.create()
+        # initialize redis client
         self.redis_config = RedisConfig()
+        self.redis_client = redis.StrictRedis(
+            host=self.redis_config.host,
+            port=self.redis_config.port,
+            password=self.redis_config.password,
+            db=0)
+        # ping redis to ensure the connection is good
+        self.redis_client.ping()
         locust.events.quitting += lambda: self.on_quit()
 
     @task
@@ -160,11 +168,7 @@ class MyTaskSet(TaskSet):
 
         # write all data to redis
         print "on_quit: Flushing buffer"
-        client = redis.StrictRedis(host=self.redis_config.host,
-                                   port=self.redis_config.port,
-                                   password=self.redis_config.password,
-                                   db=0)
-        self.buffer.flush(client)
+        self.buffer.flush(self.redis_client)
 
 
 class MyLocust(HttpLocust):
