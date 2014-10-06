@@ -32,6 +32,8 @@ class RedisConfig(object):
         if cls.REDIS_PASSWORD_KEY not in os.environ:
             print("Warning: environment var '{0}' not found. Not using redis "
                   "password.".format(cls.REDIS_PASSWORD_KEY))
+        else:
+            print "Found Redis password"
 
         return (os.environ[cls.REDIS_HOST_KEY],
                 os.environ[cls.REDIS_PORT_KEY],

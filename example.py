@@ -87,7 +87,8 @@ class MyTaskSet(TaskSet):
                              "email": email,
                              "ttl": 7200} }
         # print payload
-        response = self.designate_client.post_zone(data=json.dumps(payload))
+        response = self.designate_client.post_zone(data=json.dumps(payload),
+                                                   name='/zones')
         # print response.content
 
         if response.status_code == 201:
@@ -106,7 +107,8 @@ class MyTaskSet(TaskSet):
         zone_id = response_json['id']
         payload = {"zone": { "ttl": 3600 } }
 
-        update_resp = self.designate_client.patch_zone(zone_id, data=json.dumps(payload))
+        update_resp = self.designate_client.patch_zone(
+            zone_id, data=json.dumps(payload), name='/zone/zoneID')
         if update_resp.status_code == 200:
             self.buffer.append((self.buffer.UPDATE, update_resp))
 
@@ -130,11 +132,12 @@ class MyTaskSet(TaskSet):
                                   "records" : [ random_ip() ] }}
 
         recordset_resp = self.designate_client.post_recordset(
-            zone_id, data=json.dumps(payload))
+            zone_id, data=json.dumps(payload), name='/zones/zoneID/recordsets')
 
         # store the updated zone's response which contains the updated serial
         if recordset_resp.status_code == 201:
-            zone_resp = self.designate_client.get_zone(zone_id)
+            zone_resp = self.designate_client.get_zone(zone_id,
+                                                       name='/zone/zoneID')
             if zone_resp.status_code == 200:
                 # print "adding zone_resp:", zone_resp.json()
                 self.buffer.append((self.buffer.UPDATE, zone_resp))
