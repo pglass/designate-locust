@@ -83,7 +83,11 @@ class MyTaskSet(TaskSet):
             db=0)
         # ping redis to ensure the connection is good
         self.redis_client.ping()
-        locust.events.quitting += lambda: self.on_quit()
+
+        # ensure cleanup when the test is stopped
+        locust.events.locust_stop_hatching += lambda: self.on_stop()
+        # ensure cleanup on interrupts
+        locust.events.quitting += lambda: self.on_stop()
 
     @task
     def zone_post(self):
@@ -160,15 +164,11 @@ class MyTaskSet(TaskSet):
                                          "zone_records": 999999999,
                                          "zone_recordsets": 999999999}}))
 
-    def on_quit(self):
-        # CTRL-C will bring us here. It's possible there's a task that has not
-        # yet finished. Using the `-n` flag to limit the total number of
-        # requests means any additional requests will fail and cleanup won't
-        # work right...
-
+    def on_stop(self):
         # write all data to redis
-        print "on_quit: Flushing buffer"
+        print "on_stop: Flushing buffer"
         self.buffer.flush(self.redis_client)
+        print "on_stop: done flushing buffer"
 
 
 class MyLocust(HttpLocust):
@@ -176,5 +176,3 @@ class MyLocust(HttpLocust):
     # in milliseconds
     min_wait = 100
     max_wait = 1000
-    # defines the designate endpoint
-    host="http://23.253.149.85"
