@@ -1,7 +1,7 @@
 Overview
 --------
 
-This uses Locust to do distributed load generation for Designate deployments. 
+This uses Locust to do distributed load generation for Designate deployments. API operations are executed to induce zone transfers to the DNS backend. Each time a zone's serial changes, the timestamp is put in a Redis store. Afterwards, these timestamps are compared to corresponding timestamps taken externally on the DNS backend server. In particular, this is looking to load test the miniDNS component.
 
 Installation
 ------------
@@ -10,7 +10,7 @@ Optionally, create a virtual environment to work in first.
 
     pip install fake-factory locustio pyzmq redis
 
-Or see `setup.sh` for an installation sequence (tested on Ubuntu 12.04).
+Or see `setup.sh` for an installation sequence (on Ubuntu 12.04).
 
 Usage
 -----
