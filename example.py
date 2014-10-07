@@ -188,10 +188,9 @@ class MyTaskSet(TaskSet):
         self.buffer.flush(self.redis_client)
         print "on_stop: done flushing buffer"
 
-        print "on_stop: Generating plots"
-        analysis.analyze(self.redis_client)
-        print "on_stop: done generating plots"
-
+    #    print "on_stop: Generating plots"
+    #    analysis.analyze(self.redis_client)
+    #    print "on_stop: done generating plots"
 
 
 class MyLocust(HttpLocust):

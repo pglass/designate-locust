@@ -2,6 +2,7 @@ from datetime import datetime
 import pygal
 import redis
 from collections import OrderedDict
+from config import RedisConfig
 
 
 def analyze(r):
@@ -63,8 +64,6 @@ def analyze(r):
 #    chart.add('Times', vals)
 #    chart.render_to_file('bar.svg')
 
-
-
 def gen_test_data(r, amount=50):
     """Generate some data for testing the analyze function."""
     import random
@@ -89,8 +88,10 @@ def gen_test_data(r, amount=50):
         r.set(bind_key, bind_val.strftime('%d-%b-%Y %H:%M:%S.%f'))
 
 if __name__ == '__main__':
-    r = redis.StrictRedis(host='localhost', port=6379)
+    config = RedisConfig()
+    r = redis.StrictRedis(
+        host=config.host,
+        port=config.port,
+        password=config.password)
     r.ping()
-    r.flushall()
-    gen_test_data(r, amount=100)
     analyze(r)
