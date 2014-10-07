@@ -13,6 +13,6 @@ sudo apt-get -y install \
 pip install -U --force --no-use-wheel pip
 pip install -U --force --no-use-wheel setuptools 
 hash -r
-pip install fake-factory locustio pyzmq redis
+pip install fake-factory locustio pyzmq redis pygal
 
 git clone https://github.com/pglass/designate-locust.git
