@@ -1,14 +1,32 @@
-from locust import HttpLocust, TaskSet, task
+from locust import HttpLocust
+from locust import TaskSet
+from locust import task
+from locust import web
 import locust.events
 from faker import Factory
 import json
 import datetime
 import random
+import os
 import redis
 
 from client import DesignateClient
 from config import RedisConfig
+import analysis
 
+@web.app.route('/plots/line')
+def line_plot():
+    filename = 'line.svg'
+    if os.path.exists(filename):
+        return open(filename, 'r').read()
+    return "No line plot found"
+
+@web.app.route('/plots/box')
+def box_plot():
+    filename = 'box.svg'
+    if os.path.exists(filename):
+        return open(filename, 'r').read()
+    return "No plots found"
 
 def get_timestamp():
     return str(datetime.datetime.now())
@@ -169,6 +187,11 @@ class MyTaskSet(TaskSet):
         print "on_stop: Flushing buffer"
         self.buffer.flush(self.redis_client)
         print "on_stop: done flushing buffer"
+
+        print "on_stop: Generating plots"
+        analysis.analyze(self.redis_client)
+        print "on_stop: done generating plots"
+
 
 
 class MyLocust(HttpLocust):
