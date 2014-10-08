@@ -110,12 +110,12 @@ def pygal_analyze(r):
     chart.add('Time', times.values())
     chart.render_to_file('box.svg')
 
-    #chart = pygal.Line()
-    #chart.title = "Time from API to Bind9. Average = " + str(avg_time)
-    #chart.title += " ({0})".format(datetime.now())
-    #chart.x_labels = map(str, range(len(times)))
-    #chart.add('Time', times.values())
-    #chart.render_to_file('line.svg')
+    chart = pygal.Line()
+    chart.title = "Time from API to Bind9. Average = " + str(avg_time)
+    chart.title += " ({0})".format(datetime.now())
+    chart.x_labels = map(str, range(len(times)))
+    chart.add('Time', times.values())
+    chart.render_to_file('line.svg')
 
     chart = pygal.XY(stroke=False)
     chart.title = "Time from API to Bind9. Average = " + str(avg_time)
