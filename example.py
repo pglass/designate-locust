@@ -1,43 +1,25 @@
 from locust import HttpLocust
 from locust import TaskSet
 from locust import task
-from locust import web
 import locust.events
 from faker import Factory
 import json
 import datetime
 import random
-import os
 import redis
 
 from client import DesignateClient
 from config import RedisConfig
 import analysis
 
-@web.app.route('/plots/line')
-def line_plot():
-    filename = 'line.svg'
-    if os.path.exists(filename):
-        return open(filename, 'r').read()
-    return "No line plot found"
-
-@web.app.route('/plots/box')
-def box_plot():
-    filename = 'box.svg'
-    if os.path.exists(filename):
-        return open(filename, 'r').read()
-    return "No plots found"
+# all of our flask web routing functions need to be in this module
+from web import *
 
 def get_timestamp():
     return str(datetime.datetime.now())
 
 def randomize(string):
     return "{0}{1}".format(string, random.randint(1000000000, 9999999999))
-
-def randomize_domain(name):
-    parts = name.rsplit('.', 2)
-    parts[0] = randomize(parts[0])
-    return ".".join(parts)
 
 def random_ip():
     return ".".join(str(random.randint(0, 255)) for _ in range(4))
