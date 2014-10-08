@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plot
-# import pygal
+import pygal
 from collections import OrderedDict
 from config import RedisConfig
 from collections import namedtuple
@@ -85,43 +85,43 @@ def analyze(r):
     times = compute_times(api_data, bind_data)
     make_scatter_plot(times.keys(), times.values(), 'scatter.png')
 
-#def pygal_analyze(r):
-#    """Grab data from redis and compute some statistics.
-#    :param r: A Redis client
-#    """
-#    api = r.keys(pattern='api*')
-#    api = sorted(api, key= lambda k: k.split('-')[2])
-#    #times = {}
-#    times = OrderedDict()
-#    for key in api:
-#        apitime = datetime.strptime(r.get(key), "%Y-%m-%dT%H:%M:%S.%f")
-#        key = key.replace('.com.','.com')
-#        key = key.replace('api','bind')
-#        if r.get(key) is not None:
-#            bindtime = datetime.strptime(r.get(key), "%d-%b-%Y %H:%M:%S.%f")
-#            times[key.split('bind-')[1]] = abs((bindtime-apitime).total_seconds())
-#
-#    avg_time = sum(times.values()) / len(times)
-#    # print "Average Time: %s seconds" % str(avg_time)
-#
-#    chart = pygal.Box()
-#    chart.title = "Time from API to Bind9. Average = " + str(avg_time)
-#    chart.title += " ({0})".format(datetime.now())
-#    chart.add('Time', times.values())
-#    chart.render_to_file('box.svg')
-#
-#    #chart = pygal.Line()
-#    #chart.title = "Time from API to Bind9. Average = " + str(avg_time)
-#    #chart.title += " ({0})".format(datetime.now())
-#    #chart.x_labels = map(str, range(len(times)))
-#    #chart.add('Time', times.values())
-#    #chart.render_to_file('line.svg')
-#
-#    chart = pygal.XY(stroke=False)
-#    chart.title = "Time from API to Bind9. Average = " + str(avg_time)
-#    chart.title += " ({0})".format(datetime.now())
-#    chart.add('Time', zip(xrange(len(times)), times.values()))
-#    chart.render_to_file('scatter.svg')
+def pygal_analyze(r):
+    """Grab data from redis and compute some statistics.
+    :param r: A Redis client
+    """
+    api = r.keys(pattern='api*')
+    api = sorted(api, key= lambda k: k.split('-')[2])
+    #times = {}
+    times = OrderedDict()
+    for key in api:
+        apitime = datetime.strptime(r.get(key), "%Y-%m-%dT%H:%M:%S.%f")
+        key = key.replace('.com.','.com')
+        key = key.replace('api','bind')
+        if r.get(key) is not None:
+            bindtime = datetime.strptime(r.get(key), "%d-%b-%Y %H:%M:%S.%f")
+            times[key.split('bind-')[1]] = abs((bindtime-apitime).total_seconds())
+
+    avg_time = sum(times.values()) / len(times)
+    # print "Average Time: %s seconds" % str(avg_time)
+
+    chart = pygal.Box()
+    chart.title = "Time from API to Bind9. Average = " + str(avg_time)
+    chart.title += " ({0})".format(datetime.now())
+    chart.add('Time', times.values())
+    chart.render_to_file('box.svg')
+
+    #chart = pygal.Line()
+    #chart.title = "Time from API to Bind9. Average = " + str(avg_time)
+    #chart.title += " ({0})".format(datetime.now())
+    #chart.x_labels = map(str, range(len(times)))
+    #chart.add('Time', times.values())
+    #chart.render_to_file('line.svg')
+
+    chart = pygal.XY(stroke=False)
+    chart.title = "Time from API to Bind9. Average = " + str(avg_time)
+    chart.title += " ({0})".format(datetime.now())
+    chart.add('Time', zip(xrange(len(times)), times.values()))
+    chart.render_to_file('scatter.svg')
 
 def gen_test_data(r, amount=50):
     """Generate some data for testing the analyze function."""
@@ -154,4 +154,8 @@ if __name__ == '__main__':
         port=config.port,
         password=config.password)
     r.ping()
+    print 'matplotlib analyze...'
     analyze(r)
+
+    print 'pygal analyze...'
+    pygal_analyze(r)
