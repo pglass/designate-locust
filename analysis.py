@@ -30,12 +30,19 @@ def analyze(r):
     chart.add('Time', times.values())
     chart.render_to_file('box.svg')
 
-    chart = pygal.Line()
+    #chart = pygal.Line()
+    #chart.title = "Time from API to Bind9. Average = " + str(avg_time)
+    #chart.title += " ({0})".format(datetime.now())
+    #chart.x_labels = map(str, range(len(times)))
+    #chart.add('Time', times.values())
+    #chart.render_to_file('line.svg')
+
+    chart = pygal.XY(stroke=False)
     chart.title = "Time from API to Bind9. Average = " + str(avg_time)
     chart.title += " ({0})".format(datetime.now())
-    chart.x_labels = map(str, range(len(times)))
-    chart.add('Time', times.values())
-    chart.render_to_file('line.svg')
+    chart.add('Time', zip(xrange(len(times)), times.values()))
+    chart.render_to_file('scatter.svg')
+
 
 #    # bin the times
 #    values = list(sorted(times.values()))

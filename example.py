@@ -42,20 +42,37 @@ def randomize_domain(name):
 def random_ip():
     return ".".join(str(random.randint(0, 255)) for _ in range(4))
 
+def select_random_item(vals):
+    """Return a random item in this list, or None if empty."""
+    if not vals:
+        return None
+    i = random.randrange(0, len(vals))
+    return vals[i]
+
 
 class RedisBuffer(list):
 
     CREATE = 1
     UPDATE = 2
 
-    def flush(self, client):
+    def __init__(self, client, max_size=100):
+        self.client = client
+        self.max_size = max_size
+
+    def append(self, item):
+        super(RedisBuffer, self).append(item)
+        if len(self) > self.max_size:
+            self.flush()
+
+    def flush(self):
         """Write everything stored in this buffer to redis."""
+        print "Flushing buffer"
         while self:
             item = self.pop()
-            if not self._store_item(item, client):
+            if not self._store_item(item):
                 print "Failed to store: ", item[0], item[1].json()
 
-    def _store_item(self, item, client):
+    def _store_item(self, item):
         """Store a key-value pair in redis where the key contains the
         zone name and serial number, and the value is the timestamp of the
         create or update corresponding to that serial."""
@@ -75,14 +92,7 @@ class RedisBuffer(list):
         else:
             print "ERORORORR"
             return False
-        return client.set(key, value)
-
-    def get_random_item(self):
-        """Return a random item in this list, or None if empty."""
-        if not self:
-            return None
-        i = random.randrange(0, len(self))
-        return self[i]
+        return self.client.set(key, value)
 
 
 class MyTaskSet(TaskSet):
@@ -90,7 +100,6 @@ class MyTaskSet(TaskSet):
     def __init__(self, *args, **kwargs):
         super(MyTaskSet, self).__init__(*args, **kwargs)
         self.designate_client = DesignateClient(self.client)
-        self.buffer = RedisBuffer()
         self.fake = Factory.create()
         # initialize redis client
         self.redis_config = RedisConfig()
@@ -102,10 +111,31 @@ class MyTaskSet(TaskSet):
         # ping redis to ensure the connection is good
         self.redis_client.ping()
 
+        # the RedisBuffer will write to Redis periodically
+        self.buffer = RedisBuffer(client=self.redis_client)
+
+        # stores all created zones
+        self.zone_list = []
+
         # ensure cleanup when the test is stopped
         locust.events.locust_stop_hatching += lambda: self.on_stop()
         # ensure cleanup on interrupts
         locust.events.quitting += lambda: self.on_stop()
+
+    def on_start(self):
+        # assume a server already exists
+
+        # ensure we won't reach quota limits
+        self.designate_client.patch_quotas(tenant='noauth-project',
+            data=json.dumps({ "quota": { "zones": 999999999,
+                                         "recordset_records": 999999999,
+                                         "zone_records": 999999999,
+                                         "zone_recordsets": 999999999}}))
+
+    def on_stop(self):
+        print "calling on_stop"
+        # write all data to redis
+        self.buffer.flush()
 
     @task
     def zone_post(self):
@@ -123,14 +153,13 @@ class MyTaskSet(TaskSet):
 
         if response.status_code == 201:
             self.buffer.append((self.buffer.CREATE, response))
+            self.zone_list.append(response)
 
     @task
     def zone_patch(self):
-        item = self.buffer.get_random_item()
-        if item is None:
+        response = select_random_item(self.zone_list)
+        if response is None:
             return
-
-        _, response = item
 
         response_json = response.json().get('zone')
         # print "response_json", response_json
@@ -144,11 +173,9 @@ class MyTaskSet(TaskSet):
 
     @task
     def recordset_create(self):
-        item = self.buffer.get_random_item()
-        if item is None:
+        response = select_random_item(self.zone_list)
+        if response is None:
             return
-
-        _, response = item
 
         response_json = response.json().get('zone')
         # print "response_json", response_json
@@ -171,26 +198,6 @@ class MyTaskSet(TaskSet):
             if zone_resp.status_code == 200:
                 # print "adding zone_resp:", zone_resp.json()
                 self.buffer.append((self.buffer.UPDATE, zone_resp))
-
-    def on_start(self):
-        # assume a server already exists
-
-        # ensure we won't reach quota limits
-        self.designate_client.patch_quotas(tenant='noauth-project',
-            data=json.dumps({ "quota": { "zones": 999999999,
-                                         "recordset_records": 999999999,
-                                         "zone_records": 999999999,
-                                         "zone_recordsets": 999999999}}))
-
-    def on_stop(self):
-        # write all data to redis
-        print "on_stop: Flushing buffer"
-        self.buffer.flush(self.redis_client)
-        print "on_stop: done flushing buffer"
-
-    #    print "on_stop: Generating plots"
-    #    analysis.analyze(self.redis_client)
-    #    print "on_stop: done generating plots"
 
 
 class MyLocust(HttpLocust):
