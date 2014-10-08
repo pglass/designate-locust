@@ -1,5 +1,8 @@
 from locust import TaskSet
 
+PROJECT_ID_HEADER = 'X-Auth-Project-ID'
+ROLE_HEADER = 'X-Roles'
+
 class DesignateClient(object):
     """Extends a normal client with Designate specific http requests."""
 
@@ -12,22 +15,25 @@ class DesignateClient(object):
         self.client = client
 
     @classmethod
-    def _add_headers(cls, kwargs, headers=_HEADERS):
-        """If no headers in kwargs, insert application/json."""
-        kwargs['headers'] = kwargs.get('headers') or headers
+    def _prepare_headers(cls, kwargs):
+        """Ensures there are Content-Type and Accept headers,
+        and that the headers are in the kwargs."""
+        new_headers = dict(cls._HEADERS)
+        new_headers.update(kwargs.get('headers') or {})
+        kwargs['headers'] = new_headers
 
     #############################################
     # Server calls
     #############################################
     def post_server(self, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         self.client.post("/v1/servers", *args, **kwargs)
 
     #############################################
     # Quotas calls
     #############################################
     def patch_quotas(self, tenant, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/quotas/{0}".format(tenant)
         self.client.patch(url, *args, **kwargs)
 
@@ -35,25 +41,25 @@ class DesignateClient(object):
     # Zone calls
     #############################################
     def get_zone(self, zone_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}".format(zone_id)
         return self.client.get(url, *args, **kwargs)
 
     def list_zones(self, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         return self.client.get("/v2/zones")
 
     def post_zone(self, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         return self.client.post("/v2/zones", *args, **kwargs)
 
     def patch_zone(self, zone_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}".format(zone_id)
         return self.client.patch(url, *args, **kwargs)
 
     def delete_zone(self, zone_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}".format(zone_id)
         return self.client.delete(url, *args, **kwargs)
 
@@ -61,27 +67,27 @@ class DesignateClient(object):
     # Recordset calls
     #############################################
     def list_recordsets(self, zone_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}/recordsets".format(zone_id)
         return self.client.get(url, *args, **kwargs)
 
     def get_recordset(self, zone_id, recordset_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}/recordsets/{1}".format(zone_id, recordset_id)
         return self.client.get(url, *args, **kwargs)
 
     def post_recordset(self, zone_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}/recordsets".format(zone_id)
         return self.client.post(url, *args, **kwargs)
 
     def put_recordset(self, zone_id, recordset_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}/recordsets/{1}".format(zone_id, recordset_id)
         return self.client.put(url, *args, **kwargs)
 
     def delete_recordset(self, zone_id, recordset_id, *args, **kwargs):
-        self._add_headers(kwargs)
+        self._prepare_headers(kwargs)
         url = "/v2/zones/{0}/recordsets/{1}".format(zone_id, recordset_id)
         return self.client.delete(url, *args, **kwargs)
 
@@ -103,6 +109,7 @@ if __name__ == '__main__':
     x = DesignateClient(client)
     x.get_zone('test_get_zone')
     x.patch_zone('test_patch', data={'put': 'data'},
-            headers={'Content-Type': 'text/dns'})
+            headers={'Content-Type': 'text/dns',
+                'X-Auth-Project': 'aasdfsadfsdfs'})
     x.post_zone('test_post')
     x.delete_zone('test_delete')

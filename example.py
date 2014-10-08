@@ -8,6 +8,7 @@ import datetime
 import random
 import redis
 
+import client
 from client import DesignateClient
 from config import RedisConfig
 import analysis
@@ -24,12 +25,16 @@ def randomize(string):
 def random_ip():
     return ".".join(str(random.randint(0, 255)) for _ in range(4))
 
-def select_random_item(vals):
-    """Return a random item in this list, or None if empty."""
-    if not vals:
-        return None
-    i = random.randrange(0, len(vals))
-    return vals[i]
+
+class DataPool(list):
+    """Exists just to add some methods to the list type."""
+
+    def get_random_item(self):
+        """Return a random item in this list, or None if empty."""
+        if not self:
+            return None
+        i = random.randrange(0, len(self))
+        return self[i]
 
 
 class RedisBuffer(list):
@@ -43,12 +48,12 @@ class RedisBuffer(list):
 
     def append(self, item):
         super(RedisBuffer, self).append(item)
-        if len(self) > self.max_size:
+        if len(self) >= self.max_size:
             self.flush()
 
     def flush(self):
         """Write everything stored in this buffer to redis."""
-        print "Flushing buffer"
+        print "Flushing buffer -- {0} items to redis".format(len(self))
         while self:
             item = self.pop()
             if not self._store_item(item):
@@ -97,22 +102,37 @@ class MyTaskSet(TaskSet):
         self.buffer = RedisBuffer(client=self.redis_client)
 
         # stores all created zones
-        self.zone_list = []
+        self.zone_list = DataPool([])
 
+        # a pool of tenants from which zones will be created
+        self.tenant_list = DataPool(
+            [chr(i) for i in xrange(ord('A'), ord('Z') + 1)])
+
+        # ensure we don't reach quota limits
+        locust.events.master_start_hatching += lambda: self.increase_quotas()
         # ensure cleanup when the test is stopped
         locust.events.locust_stop_hatching += lambda: self.on_stop()
         # ensure cleanup on interrupts
         locust.events.quitting += lambda: self.on_stop()
 
-    def on_start(self):
-        # assume a server already exists
+    def _get_random_tenant(self):
+        return self.tenant_list.get_random_item()
 
+    def increase_quotas(self):
+        """This should be run only on the master."""
         # ensure we won't reach quota limits
-        self.designate_client.patch_quotas(tenant='noauth-project',
-            data=json.dumps({ "quota": { "zones": 999999999,
-                                         "recordset_records": 999999999,
-                                         "zone_records": 999999999,
-                                         "zone_recordsets": 999999999}}))
+        payload = { "quota": { "zones": 999999999,
+                               "recordset_records": 999999999,
+                               "zone_records": 999999999,
+                               "zone_recordsets": 999999999}}
+        for tenant in self.tenant_list:
+            print "Increasing quotas for tenant {0}".format(tenant)
+            headers = { client.ROLE_HEADER: 'admin',
+                        client.PROJECT_ID_HEADER: tenant}
+            self.designate_client.patch_quotas(tenant=tenant,
+                                               data=json.dumps(payload),
+                                               headers=headers,
+                                               name='/v2/quotas/tenantID')
 
     def on_stop(self):
         print "calling on_stop"
@@ -128,10 +148,14 @@ class MyTaskSet(TaskSet):
         payload = {"zone": { "name": zone,
                              "email": email,
                              "ttl": 7200} }
-        # print payload
+
+        # pick a random tenant
+        headers = { client.ROLE_HEADER: 'admin',
+                    client.PROJECT_ID_HEADER: self._get_random_tenant() }
+
         response = self.designate_client.post_zone(data=json.dumps(payload),
-                                                   name='/zones')
-        # print response.content
+                                                   name='/zones',
+                                                   headers=headers)
 
         if response.status_code == 201:
             self.buffer.append((self.buffer.CREATE, response))
@@ -139,23 +163,29 @@ class MyTaskSet(TaskSet):
 
     @task
     def zone_patch(self):
-        response = select_random_item(self.zone_list)
+        response = self.zone_list.get_random_item()
         if response is None:
             return
 
         response_json = response.json().get('zone')
         # print "response_json", response_json
         zone_id = response_json['id']
+        project_id = response_json['project_id']
+
         payload = {"zone": { "ttl": 3600 } }
 
+        headers = { client.ROLE_HEADER: 'admin',
+                    client.PROJECT_ID_HEADER: project_id }
+
         update_resp = self.designate_client.patch_zone(
-            zone_id, data=json.dumps(payload), name='/zone/zoneID')
+            zone_id, data=json.dumps(payload), name='/zone/zoneID',
+            headers=headers)
         if update_resp.status_code == 200:
             self.buffer.append((self.buffer.UPDATE, update_resp))
 
     @task
     def recordset_create(self):
-        response = select_random_item(self.zone_list)
+        response = self.zone_list.get_random_item()
         if response is None:
             return
 
@@ -163,6 +193,7 @@ class MyTaskSet(TaskSet):
         # print "response_json", response_json
         zone_id = response_json['id']
         zone_name = response_json['name']
+        project_id = response_json['project_id']
 
         a_record_name = "{0}.{1}".format(randomize("www"), zone_name)
         payload = {"recordset" : {"name" : a_record_name,
@@ -170,13 +201,18 @@ class MyTaskSet(TaskSet):
                                   "ttl" : 3600,
                                   "records" : [ random_ip() ] }}
 
+        headers = { client.ROLE_HEADER: 'admin',
+                    client.PROJECT_ID_HEADER: project_id }
+
         recordset_resp = self.designate_client.post_recordset(
-            zone_id, data=json.dumps(payload), name='/zones/zoneID/recordsets')
+            zone_id, data=json.dumps(payload), name='/zones/zoneID/recordsets',
+            headers=headers)
 
         # store the updated zone's response which contains the updated serial
         if recordset_resp.status_code == 201:
             zone_resp = self.designate_client.get_zone(zone_id,
-                                                       name='/zone/zoneID')
+                                                       name='/zone/zoneID',
+                                                       headers=headers)
             if zone_resp.status_code == 200:
                 # print "adding zone_resp:", zone_resp.json()
                 self.buffer.append((self.buffer.UPDATE, zone_resp))
