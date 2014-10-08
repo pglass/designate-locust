@@ -3,7 +3,7 @@
 sudo apt-get -y update
 
 sudo apt-get -y install \
-    git python python-dev python-pip gcc build-essential
+    git python python-dev python-pip gcc build-essential python-matplotlib
 
 # With --no-use-wheel, we get a pkg_resources.DistributionNotFound error 
 # (on Ubuntu 12.04) when we try to run locust after it is installed below. 
