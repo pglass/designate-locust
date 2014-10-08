@@ -109,7 +109,9 @@ class MyTaskSet(TaskSet):
             [chr(i) for i in xrange(ord('A'), ord('Z') + 1)])
 
         # ensure we don't reach quota limits
-        locust.events.master_start_hatching += lambda: self.increase_quotas()
+        # this doesn't seem to work...
+        #locust.events.master_start_hatching += lambda: self.increase_quotas()
+        #locust.events.master_stop_hatching += lambda: self.increase_quotas()
         # ensure cleanup when the test is stopped
         locust.events.locust_stop_hatching += lambda: self.on_stop()
         # ensure cleanup on interrupts
@@ -118,9 +120,13 @@ class MyTaskSet(TaskSet):
     def _get_random_tenant(self):
         return self.tenant_list.get_random_item()
 
+    def on_start(self):
+        self.increase_quotas()
+
     def increase_quotas(self):
         """This should be run only on the master."""
         # ensure we won't reach quota limits
+        print "ASDFASDF"
         payload = { "quota": { "zones": 999999999,
                                "recordset_records": 999999999,
                                "zone_records": 999999999,

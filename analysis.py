@@ -3,6 +3,64 @@ import pygal
 import redis
 from collections import OrderedDict
 from config import RedisConfig
+from collections import namedtuple
+
+DataPoint = namedtuple('DataPoint', ['type', 'zone', 'serial', 'timestamp'])
+
+API = 1
+BIND = 2
+
+def get_api_data(r):
+    """Return a list of DataPoints"""
+    api_keys = r.keys(pattern='api*')
+    results = {}
+    for key in api_keys:
+        val = r.get(key)
+        apitime = datetime.strptime(val, "%Y-%m-%dT%H:%M:%S.%f")
+        parts = key.split('-')
+        datapoint = DataPoint(type=API,
+                              zone=parts[1],
+                              serial=int(parts[2]),
+                              timestamp=apitime)
+        results[datapoint.serial] = datapoint
+    return results
+
+def get_bind_data(r):
+    bind_keys = r.keys(pattern='bind*')
+    results = {}
+    for key in bind_keys:
+        val = r.get(key)
+        bindtime = datetime.strptime(val, "%d-%b-%Y %H:%M:%S.%f")
+        parts = key.split('-')
+        # normalize the trailing '.'
+        parts[1] = parts[1].strip('.') + '.'
+        datapoint = DataPoint(type=BIND,
+                              zone=parts[1],
+                              serial=int(parts[2]),
+                              timestamp=bindtime)
+        results[datapoint.serial] = datapoint
+    return results
+
+def compute_time(api_datapoint, bind_datapoint):
+    return (bind_datapoint.timestamp - api_datapoint.timestamp).total_seconds()
+
+def process_data(api_data, bind_data):
+    # use an OrderedDict to ensure things are sorted by serial
+    serials = sorted(api_data.keys())
+    results = OrderedDict()
+
+    for serial in serials:
+        api_datapoint = api_data[serial]
+        bind_datapoint = bind_data.get(serial)
+        results[serial] = [
+            # add whatever results you want here
+            compute_time(api_datapoint, bind_datapoint)
+                if bind_datapoint else float('+inf'),
+        ]
+    return results
+
+
+
 
 
 def analyze(r):
@@ -74,13 +132,14 @@ def analyze(r):
 def gen_test_data(r, amount=50):
     """Generate some data for testing the analyze function."""
     import random
+    import time
     from datetime import timedelta
     print "generating {0} entries".format(amount)
     api_format_str = "api-{0}-{1}"
     bind_format_str = "bind-{0}-{1}"
 
     for i in xrange(amount):
-        serial = i + 10
+        serial = int(time.time() * 1000000)
         zone_name = "zone{0}".format(i)
         api_key = api_format_str.format(zone_name + '.com.', serial)
         bind_key = bind_format_str.format(zone_name + '.com', serial)
