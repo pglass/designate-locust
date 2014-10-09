@@ -26,16 +26,17 @@ def get_api_data(r):
     results = {}
     for key in api_keys:
         val = r.get(key)
-        apitime = datetime.strptime(val, "%Y-%m-%dT%H:%M:%S.%f")
-        parts = key.split('-')
-        datapoint = DataPoint(type=API,
-                              zone=parts[1],
-                              serial=int(parts[2]),
-                              timestamp=apitime)
-        if datapoint.serial in results:
-            results[datapoint.serial].append(datapoint)
-        else:
-            results[datapoint.serial] = [datapoint]
+        if val is not None and val != 'None':
+            apitime = datetime.strptime(val, "%Y-%m-%dT%H:%M:%S.%f")
+            parts = key.split('-')
+            datapoint = DataPoint(type=API,
+                                  zone=parts[1],
+                                  serial=int(parts[2]),
+                                  timestamp=apitime)
+            if datapoint.serial in results:
+                results[datapoint.serial].append(datapoint)
+            else:
+                results[datapoint.serial] = [datapoint]
     return results
 
 def get_bind_data(r):
@@ -44,18 +45,19 @@ def get_bind_data(r):
     results = {}
     for key in bind_keys:
         val = r.get(key)
-        bindtime = datetime.strptime(val, "%d-%b-%Y %H:%M:%S.%f")
-        parts = key.split('-')
-        # normalize the trailing '.'
-        parts[1] = parts[1].strip('.') + '.'
-        datapoint = DataPoint(type=BIND,
-                              zone=parts[1],
-                              serial=int(parts[2]),
-                              timestamp=bindtime)
-        if datapoint.serial in results:
-            results[datapoint.serial].append(datapoint)
-        else:
-            results[datapoint.serial] = [datapoint]
+        if val is not None and val != 'None':
+            bindtime = datetime.strptime(val, "%d-%b-%Y %H:%M:%S.%f")
+            parts = key.split('-')
+            # normalize the trailing '.'
+            parts[1] = parts[1].strip('.') + '.'
+            datapoint = DataPoint(type=BIND,
+                                  zone=parts[1],
+                                  serial=int(parts[2]),
+                                  timestamp=bindtime)
+            if datapoint.serial in results:
+                results[datapoint.serial].append(datapoint)
+            else:
+                results[datapoint.serial] = [datapoint]
     return results
 
 def compute_times(api_data, bind_data):
@@ -83,8 +85,18 @@ def make_scatter_plot(xs, ys, filename):
     x = np.array(xs)
     y = np.array(ys)
 
+    avg =  np.average(y)
+
     # plot the data
-    plot.scatter(x, y)
+    # plot.scatter(x, y)
+    plot.style.use('dark_background')
+    plot.plot(x, y, 'o', color='hotpink')
+    plot.ylabel("seconds")
+    plot.xlabel("serial number")
+    plot.title("Seconds from API to Bind (avg {0})".format(avg))
+
+    figure = plot.gcf()
+    figure.set_size_inches(15, 10)
 
     # adjust tick labels
     tickvals, _ = plot.xticks()
@@ -92,9 +104,11 @@ def make_scatter_plot(xs, ys, filename):
     plot.xticks(tickvals, ticklabels, rotation='vertical')
 
     # make room for new tick labels
-    plot.subplots_adjust(bottom=0.5)
+    plot.subplots_adjust(bottom=0.2)
 
-    plot.savefig(filename)
+    plot.grid(True)
+
+    plot.savefig(filename, dpi=100)
 
 def analyze(r):
     """Generate plots using matplotlib."""
@@ -118,7 +132,8 @@ def pygal_analyze(r):
         apitime = datetime.strptime(r.get(key), "%Y-%m-%dT%H:%M:%S.%f")
         key = key.replace('.com.','.com')
         key = key.replace('api','bind')
-        if r.get(key) is not None:
+        val = r.get(key)
+        if val is not None and val != 'None':
             bindtime = datetime.strptime(r.get(key), "%d-%b-%Y %H:%M:%S.%f")
             times[key.split('bind-')[1]] = abs((bindtime-apitime).total_seconds())
 
@@ -204,5 +219,5 @@ if __name__ == '__main__':
     print 'matplotlib analyze...'
     analyze(r)
 
-    print 'pygal analyze...'
-    pygal_analyze(r)
+    #print 'pygal analyze...'
+    #pygal_analyze(r)
