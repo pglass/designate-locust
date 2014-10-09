@@ -1,13 +1,19 @@
-from datetime import datetime
+from collections import OrderedDict, namedtuple
+from datetime import datetime, timedelta
+import random
+import time
+
+import pygal
 import redis
-import numpy as np
 import matplotlib
+# avoid matplotlib defaulting to an X backend when do $DISPLAY is defined.
+# this backend change must occur prior to importing matplotlib.pyplot
 matplotlib.use('Agg')
 import matplotlib.pyplot as plot
-import pygal
-from collections import OrderedDict
+import numpy as np
+
 from config import RedisConfig
-from collections import namedtuple
+
 
 DataPoint = namedtuple('DataPoint', ['type', 'zone', 'serial', 'timestamp'])
 
@@ -30,6 +36,7 @@ def get_api_data(r):
     return results
 
 def get_bind_data(r):
+    """Return a list of DataPoints"""
     bind_keys = r.keys(pattern='bind*')
     results = {}
     for key in bind_keys:
@@ -46,6 +53,9 @@ def get_bind_data(r):
     return results
 
 def compute_times(api_data, bind_data):
+    """Return a dictionary mapping each serial number to the total number of
+    seconds from when the api returned until bind logged an update for that
+    serial number."""
     def compute_time(api_datapoint, bind_datapoint):
         return (bind_datapoint.timestamp - api_datapoint.timestamp).total_seconds()
     # use an OrderedDict to ensure things are sorted by serial
@@ -80,6 +90,7 @@ def make_scatter_plot(xs, ys, filename):
     plot.savefig(filename)
 
 def analyze(r):
+    """Generate plots using matplotlib."""
     api_data = get_api_data(r)
     bind_data = get_bind_data(r)
     times = compute_times(api_data, bind_data)
@@ -125,9 +136,6 @@ def pygal_analyze(r):
 
 def gen_test_data(r, amount=50):
     """Generate some data for testing the analyze function."""
-    import random
-    import time
-    from datetime import timedelta
     print "generating {0} entries".format(amount)
     api_format_str = "api-{0}-{1}"
     bind_format_str = "bind-{0}-{1}"

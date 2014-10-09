@@ -15,16 +15,28 @@ Or see `setup.sh` for an installation sequence (on Ubuntu 12.04).
 Usage
 -----
 
-#### Redis config ####
+#### Config ####
 
-This requires a Redis server location, which is specified through environment variables:
+Configuration values are specified either through environment variable or a json file, which must be named `config.json`. Any values not found in environment variables are then looked for in the json file.
 
-    export LOCUST_REDIS_HOST=localhost
-    export LOCUST_REDIS_PORT=6379
+`config.json`:
 
-If your Redis server requires a password, then additionally:
+    {
+        "redis_host": "localhost",
+        "redis_port": 6379,
+        "redis_password": "password",
+        "designate_host": "http://192.168.33.20:9001"
+    }
 
-    export LOCUST_REDIS_PASSWORD=my_password
+Or, using environment variables:
+
+    LOCUST_REDIS_HOST=localhost   
+    LOCUST_REDIS_PORT=6379    
+    LOCUST_REDIS_PASSWORD=password
+    LOCUST_DESIGNATE_HOST=http://192.168.33.20:9001
+
+
+See `config.py` for definitions of all the key names used.
 
 #### Web Interface ####
 
@@ -49,8 +61,8 @@ where
 
 On your master node:
 
-    locust -f example.py --host=http://192.168.33.20:9001 --master
+    locust -f example.py --master
 
 Take note of your master's address, and on each of your slave nodes:
     
-    locust -f example.py --host=http://192.168.33.20:9001 --slave --master-host=<master_address>
+    locust -f example.py --slave --master-host=<master_address>

@@ -10,11 +10,13 @@ import redis
 
 import client
 from client import DesignateClient
-from config import RedisConfig
-import analysis
+from config import Config
 
 # all of our flask web routing functions need to be in this module
 from web import *
+
+CONFIG = Config('config.json')
+
 
 def get_timestamp():
     return str(datetime.datetime.now())
@@ -25,19 +27,17 @@ def randomize(string):
 def random_ip():
     return ".".join(str(random.randint(0, 255)) for _ in range(4))
 
-
-class DataPool(list):
-    """Exists just to add some methods to the list type."""
-
-    def get_random_item(self):
-        """Return a random item in this list, or None if empty."""
-        if not self:
-            return None
-        i = random.randrange(0, len(self))
-        return self[i]
+def select_random_item(vals):
+    """Return a random item in this list, or None if empty."""
+    if vals:
+        return random.choice(vals)
+    return None
 
 
 class RedisBuffer(list):
+    """Serves a buffer for data written to Redis. The buffer is flushed
+    whenever the length of this list reaches the max_size (but this is
+    only works when using append() method)"""
 
     CREATE = 1
     UPDATE = 2
@@ -89,11 +89,10 @@ class MyTaskSet(TaskSet):
         self.designate_client = DesignateClient(self.client)
         self.fake = Factory.create()
         # initialize redis client
-        self.redis_config = RedisConfig()
         self.redis_client = redis.StrictRedis(
-            host=self.redis_config.host,
-            port=self.redis_config.port,
-            password=self.redis_config.password,
+            host=CONFIG.redis_host,
+            port=CONFIG.redis_port,
+            password=CONFIG.redis_password,
             db=0)
         # ping redis to ensure the connection is good
         self.redis_client.ping()
@@ -102,11 +101,10 @@ class MyTaskSet(TaskSet):
         self.buffer = RedisBuffer(client=self.redis_client)
 
         # stores all created zones
-        self.zone_list = DataPool([])
+        self.zone_list = []
 
         # a pool of tenants from which zones will be created
-        self.tenant_list = DataPool(
-            [chr(i) for i in xrange(ord('A'), ord('Z') + 1)])
+        self.tenant_list = [chr(i) for i in xrange(ord('A'), ord('Z') + 1)]
 
         # ensure we don't reach quota limits
         # this doesn't seem to work...
@@ -118,13 +116,14 @@ class MyTaskSet(TaskSet):
         locust.events.quitting += lambda: self.on_stop()
 
     def _get_random_tenant(self):
-        return self.tenant_list.get_random_item()
+        return select_random_item(self.tenant_list)
 
     def on_start(self):
+        """This method is run whenever a simulated user starts this TaskSet."""
         self.increase_quotas()
 
     def increase_quotas(self):
-        """This should be run only on the master."""
+        """This only needs to be run on the master."""
         # ensure we won't reach quota limits
         print "ASDFASDF"
         payload = { "quota": { "zones": 999999999,
@@ -169,7 +168,7 @@ class MyTaskSet(TaskSet):
 
     @task
     def zone_patch(self):
-        response = self.zone_list.get_random_item()
+        response = select_random_item(self.zone_list)
         if response is None:
             return
 
@@ -191,7 +190,7 @@ class MyTaskSet(TaskSet):
 
     @task
     def recordset_create(self):
-        response = self.zone_list.get_random_item()
+        response = select_random_item(self.zone_list)
         if response is None:
             return
 
@@ -229,3 +228,5 @@ class MyLocust(HttpLocust):
     # in milliseconds
     min_wait = 100
     max_wait = 1000
+
+    host = CONFIG.designate_host
