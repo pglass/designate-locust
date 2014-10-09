@@ -15,7 +15,7 @@ from config import Config
 # all of our flask web routing functions need to be in this module
 from web import *
 
-CONFIG = Config('config.json')
+CONFIG = Config(json_file='config.json')
 
 
 def get_timestamp():
@@ -104,7 +104,10 @@ class MyTaskSet(TaskSet):
         self.zone_list = []
 
         # a pool of tenants from which zones will be created
-        self.tenant_list = [chr(i) for i in xrange(ord('A'), ord('Z') + 1)]
+        #self.tenant_list = [chr(i) for i in xrange(ord('A'), ord('Z') + 1)]
+        n_tenants = CONFIG.n_tenants or 1
+        print "Using {0} tenants".format(n_tenants)
+        self.tenant_list = ["T{0}".format(i + 1) for i in xrange(n_tenants)]
 
         # ensure we don't reach quota limits
         # this doesn't seem to work...
@@ -125,7 +128,6 @@ class MyTaskSet(TaskSet):
     def increase_quotas(self):
         """This only needs to be run on the master."""
         # ensure we won't reach quota limits
-        print "ASDFASDF"
         payload = { "quota": { "zones": 999999999,
                                "recordset_records": 999999999,
                                "zone_records": 999999999,
@@ -226,7 +228,7 @@ class MyTaskSet(TaskSet):
 class MyLocust(HttpLocust):
     task_set = MyTaskSet
     # in milliseconds
-    min_wait = 100
-    max_wait = 1000
+    min_wait = CONFIG.min_wait or 100
+    max_wait = CONFIG.max_wait or 1000
 
     host = CONFIG.designate_host

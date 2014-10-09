@@ -12,6 +12,9 @@ class JsonConfig(object):
     REDIS_PORT_KEY = 'redis_port'
     REDIS_PASSWORD_KEY = 'redis_password'
     DESIGNATE_HOST_KEY = 'designate_host'
+    NUMBER_TENANTS_KEY = 'n_tenants'
+    MIN_WAIT_KEY = 'min_wait'
+    MAX_WAIT_KEY = 'max_wait'
 
     def __init__(self, json_data):
         self.json = json_data
@@ -35,6 +38,9 @@ class EnvironmentConfig(object):
     REDIS_PORT_KEY = 'LOCUST_REDIS_PORT'
     REDIS_PASSWORD_KEY = 'LOCUST_REDIS_PASSWORD'
     DESIGNATE_HOST_KEY = 'LOCUST_DESIGNATE_HOST'
+    NUMBER_TENANTS_KEY = 'LOCUST_N_TENANTS'
+    MIN_WAIT_KEY = 'LOCUST_MIN_WAIT'
+    MAX_WAIT_KEY = 'LOCUST_MAX_WAIT'
 
     def get(self, key):
         return os.environ.get(key)
@@ -62,8 +68,11 @@ class Config(object):
         else:
             self.json_config = JsonConfig(json_data={})
 
-    def _get(self, env_key, json_key):
-        return (self.env_config.get(env_key) or self.json_config.get(json_key))
+    def _get(self, env_key, json_key, warning_msg=None):
+        result = (self.env_config.get(env_key) or self.json_config.get(json_key))
+        if result == None and warning_msg:
+            print "Warning: {0}".format(warning_msg)
+        return result
 
     def _get_required(self, env_key, json_key):
         val = self._get(env_key, json_key)
@@ -86,9 +95,8 @@ class Config(object):
     @property
     def redis_password(self):
         result = self._get(self.env_config.REDIS_PASSWORD_KEY,
-                         self.json_config.REDIS_PASSWORD_KEY)
-        if result == None:
-            print "Warning: Redis password not found"
+                           self.json_config.REDIS_PASSWORD_KEY,
+                           warning_msg="Redis password not found")
         return result
 
     @property
@@ -96,6 +104,27 @@ class Config(object):
         return self._get_required(self.env_config.DESIGNATE_HOST_KEY,
                                   self.json_config.DESIGNATE_HOST_KEY)
 
+    @property
+    def n_tenants(self):
+        return self._get(self.env_config.NUMBER_TENANTS_KEY,
+                         self.json_config.NUMBER_TENANTS_KEY,
+                         warning_msg="Number of tenants not specified")
+
+    @property
+    def min_wait(self):
+        result = self._get(self.env_config.MIN_WAIT_KEY,
+                         self.json_config.MIN_WAIT_KEY)
+        if result is not None:
+            print "Found min_wait time {0}".format(result)
+        return result
+
+    @property
+    def max_wait(self):
+        result = self._get(self.env_config.MAX_WAIT_KEY,
+                           self.json_config.MAX_WAIT_KEY)
+        if result is not None:
+            print "Found max_wait time {0}".format(result)
+        return result
 
 if __name__ == '__main__':
     x = Config(json_file='config.json')
