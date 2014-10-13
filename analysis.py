@@ -90,7 +90,7 @@ def make_scatter_plot(xs, ys, filename):
     # plot the data
     # plot.scatter(x, y)
     plot.style.use('dark_background')
-    plot.plot(x, y, 'o', color='hotpink')
+    plot.plot(x, y, 'o', markerfacecolor='hotpink', markeredgecolor='hotpink')
     plot.ylabel("seconds")
     plot.xlabel("serial number")
     plot.title("Seconds from API to Bind (avg {0})".format(avg))
@@ -129,13 +129,15 @@ def pygal_analyze(r):
     #times = {}
     times = OrderedDict()
     for key in api:
-        apitime = datetime.strptime(r.get(key), "%Y-%m-%dT%H:%M:%S.%f")
-        key = key.replace('.com.','.com')
-        key = key.replace('api','bind')
         val = r.get(key)
         if val is not None and val != 'None':
-            bindtime = datetime.strptime(r.get(key), "%d-%b-%Y %H:%M:%S.%f")
-            times[key.split('bind-')[1]] = abs((bindtime-apitime).total_seconds())
+            apitime = datetime.strptime(val, "%Y-%m-%dT%H:%M:%S.%f")
+            key = key.replace('.com.','.com')
+            key = key.replace('api','bind')
+            val = r.get(key)
+            if val is not None and val != 'None':
+                bindtime = datetime.strptime(val, "%d-%b-%Y %H:%M:%S.%f")
+                times[key.split('bind-')[1]] = abs((bindtime-apitime).total_seconds())
 
     avg_time = sum(times.values()) / len(times)
     # print "Average Time: %s seconds" % str(avg_time)
@@ -205,16 +207,6 @@ if __name__ == '__main__':
         host=config.redis_host,
         port=config.redis_port,
         password=config.redis_password)
-    #r.flushall()
-    #gen_test_data(r, 100)
-    #api_data = get_api_data(r)
-    #bind_data = get_bind_data(r)
-    #times = compute_times(api_data, bind_data)
-    #for a, b, v in times:
-    #    print "----", v
-    #    print "  ", a
-    #    print "  ", b
-
     r.ping()
     print 'matplotlib analyze...'
     analyze(r)

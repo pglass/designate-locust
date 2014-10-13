@@ -1,6 +1,7 @@
 from locust import HttpLocust
 from locust import TaskSet
 from locust import task
+from locust.clients import HttpSession
 import locust.events
 from faker import Factory
 import json
@@ -84,6 +85,9 @@ class RedisBuffer(list):
 
 class MyTaskSet(TaskSet):
 
+    n_tenants = CONFIG.n_tenants or 1
+    tenant_list = ["T{0}".format(i + 1) for i in xrange(n_tenants)]
+
     def __init__(self, *args, **kwargs):
         super(MyTaskSet, self).__init__(*args, **kwargs)
         self.designate_client = DesignateClient(self.client)
@@ -105,14 +109,8 @@ class MyTaskSet(TaskSet):
 
         # a pool of tenants from which zones will be created
         #self.tenant_list = [chr(i) for i in xrange(ord('A'), ord('Z') + 1)]
-        n_tenants = CONFIG.n_tenants or 1
-        print "Using {0} tenants".format(n_tenants)
-        self.tenant_list = ["T{0}".format(i + 1) for i in xrange(n_tenants)]
+        print "Using {0} tenants".format(self.n_tenants)
 
-        # ensure we don't reach quota limits
-        # this doesn't seem to work...
-        #locust.events.master_start_hatching += lambda: self.increase_quotas()
-        #locust.events.master_stop_hatching += lambda: self.increase_quotas()
         # ensure cleanup when the test is stopped
         locust.events.locust_stop_hatching += lambda: self.on_stop()
         # ensure cleanup on interrupts
@@ -123,23 +121,7 @@ class MyTaskSet(TaskSet):
 
     def on_start(self):
         """This method is run whenever a simulated user starts this TaskSet."""
-        self.increase_quotas()
-
-    def increase_quotas(self):
-        """This only needs to be run on the master."""
-        # ensure we won't reach quota limits
-        payload = { "quota": { "zones": 999999999,
-                               "recordset_records": 999999999,
-                               "zone_records": 999999999,
-                               "zone_recordsets": 999999999}}
-        for tenant in self.tenant_list:
-            print "Increasing quotas for tenant {0}".format(tenant)
-            headers = { client.ROLE_HEADER: 'admin',
-                        client.PROJECT_ID_HEADER: tenant}
-            self.designate_client.patch_quotas(tenant=tenant,
-                                               data=json.dumps(payload),
-                                               headers=headers,
-                                               name='/v2/quotas/tenantID')
+        pass
 
     def on_stop(self):
         print "calling on_stop"
@@ -232,3 +214,24 @@ class MyLocust(HttpLocust):
     max_wait = CONFIG.max_wait or 1000
 
     host = CONFIG.designate_host
+
+
+_client = HttpSession(MyLocust.host)
+_designate_client = DesignateClient(_client)
+
+def increase_quotas():
+    print "Master started -- increasing quotas"
+    payload = { "quota": { "zones": 999999999,
+                           "recordset_records": 999999999,
+                           "zone_records": 999999999,
+                           "zone_recordsets": 999999999}}
+    for tenant in MyTaskSet.tenant_list:
+        print "Increasing quotas for tenant {0}".format(tenant)
+        headers = { client.ROLE_HEADER: 'admin',
+                    client.PROJECT_ID_HEADER: tenant}
+        _designate_client.patch_quotas(tenant=tenant,
+                                       data=json.dumps(payload),
+                                       headers=headers,
+                                       name='/v2/quotas/tenantID')
+
+locust.events.master_start_hatching += increase_quotas
