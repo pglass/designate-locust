@@ -63,7 +63,7 @@ def get_bind_data(r):
 def compute_times(api_data, bind_data):
     """Return a list of tuples (serial, time)"""
     def compute_time(api_datapoint, bind_datapoint):
-        return (bind_datapoint.timestamp - api_datapoint.timestamp).total_seconds()
+        return abs((bind_datapoint.timestamp - api_datapoint.timestamp).total_seconds())
     # use an OrderedDict to ensure things are sorted by serial
     serials = sorted(api_data.keys())
     times = []
@@ -74,11 +74,15 @@ def compute_times(api_data, bind_data):
         # we have list of changes with the same serial, so differentiate
         # between them using the zone name
         for api_datapoint in api_data[serial]:
+            found = False
             for bind_datapoint in bind_datapoints:
                 if bind_datapoint.zone == api_datapoint.zone:
+                    found = True
                     timediff = compute_time(api_datapoint, bind_datapoint) \
-                               if bind_datapoint else float('+inf'),
+                               if bind_datapoint else -50
                     times.append((api_datapoint, bind_datapoint, timediff))
+            if not found:
+                times.append((api_datapoint, None, -50))
     return times
 
 def make_scatter_plot(xs, ys, filename):
@@ -199,7 +203,9 @@ def gen_test_data(r, amount=50):
         #print bind_key, bind_val
         #print
         r.set(api_key, api_val.strftime('%Y-%m-%dT%H:%M:%S.%f'))
-        r.set(bind_key, bind_val.strftime('%d-%b-%Y %H:%M:%S.%f'))
+        # create some api data points without bind datapoints
+        if random.random() < 0.6:
+            r.set(bind_key, bind_val.strftime('%d-%b-%Y %H:%M:%S.%f'))
 
 if __name__ == '__main__':
     config = Config(json_file='config.json')
