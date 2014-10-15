@@ -43,7 +43,7 @@ class RedisBuffer(list):
     CREATE = 1
     UPDATE = 2
 
-    def __init__(self, client, max_size=100):
+    def __init__(self, client, max_size=1000):
         self.client = client
         self.max_size = max_size
 
@@ -167,7 +167,7 @@ class MyTaskSet(TaskSet):
                     client.PROJECT_ID_HEADER: project_id }
 
         update_resp = self.designate_client.patch_zone(
-            zone_id, data=json.dumps(payload), name='/zone/zoneID',
+            zone_id, data=json.dumps(payload), name='/zones/zoneID',
             headers=headers)
         if update_resp.status_code == 200:
             self.buffer.append((self.buffer.UPDATE, update_resp))
@@ -200,7 +200,7 @@ class MyTaskSet(TaskSet):
         # store the updated zone's response which contains the updated serial
         if recordset_resp.status_code == 201:
             zone_resp = self.designate_client.get_zone(zone_id,
-                                                       name='/zone/zoneID',
+                                                       name='/zones/zoneID',
                                                        headers=headers)
             if zone_resp.status_code == 200:
                 # print "adding zone_resp:", zone_resp.json()
@@ -215,12 +215,19 @@ class MyLocust(HttpLocust):
 
     host = CONFIG.designate_host
 
+    def __init__(self, *args, **kwargs):
+        # this class only seems to be instantiated on the slaves
+        super(MyLocust, self).__init__(*args, **kwargs)
+        print "Create locust"
 
+
+# Ensure that the master node increases quotas when the test starts.
 _client = HttpSession(MyLocust.host)
 _designate_client = DesignateClient(_client)
 
 def increase_quotas():
     print "Master started -- increasing quotas"
+    print locust.events.master_start_hatching._handlers
     payload = { "quota": { "zones": 999999999,
                            "recordset_records": 999999999,
                            "zone_records": 999999999,
@@ -234,4 +241,23 @@ def increase_quotas():
                                        headers=headers,
                                        name='/v2/quotas/tenantID')
 
+print locust.events.master_start_hatching._handlers
 locust.events.master_start_hatching += increase_quotas
+
+# Send data to graphite
+# test_time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+def report_to_graphite(client_id, data):
+    print "Got data: ", data
+    for stat in data['stats']:
+        print '-----------------------'
+        graphite_key = "locust_{0}_{1}".format(stat['method'], stat['name'])
+        for epoch_time, count in stat['num_reqs_per_sec'].iteritems():
+            graphite_entry = "{0} {1} {2}".format(graphite_key,
+                                                  count,
+                                                  epoch_time)
+            print graphite_entry
+
+        #print stat['method'], stat['name'], stat['num_reqs_per_sec']
+        #print stat
+
+locust.events.slave_report += report_to_graphite
