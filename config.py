@@ -15,6 +15,8 @@ class JsonConfig(object):
     NUMBER_TENANTS_KEY = 'n_tenants'
     MIN_WAIT_KEY = 'min_wait'
     MAX_WAIT_KEY = 'max_wait'
+    GRAPHITE_HOST = 'graphite_host'
+    GRAPHITE_PORT = 'graphite_port'
 
     def __init__(self, json_data):
         self.json = json_data
@@ -41,6 +43,8 @@ class EnvironmentConfig(object):
     NUMBER_TENANTS_KEY = 'LOCUST_N_TENANTS'
     MIN_WAIT_KEY = 'LOCUST_MIN_WAIT'
     MAX_WAIT_KEY = 'LOCUST_MAX_WAIT'
+    GRAPHITE_HOST = 'LOCUST_GRAPHITE_HOST'
+    GRAPHITE_PORT = 'LOCUST_GRAPHITE_PORT'
 
     def get(self, key):
         return os.environ.get(key)
@@ -125,6 +129,16 @@ class Config(object):
         if result is not None:
             print "Found max_wait time {0}".format(result)
         return result
+
+    @property
+    def graphite_host(self):
+        return self._get(self.env_config.GRAPHITE_HOST,
+                         self.json_config.GRAPHITE_HOST)
+
+    @property
+    def graphite_port(self):
+        return self._get(self.env_config.GRAPHITE_PORT,
+                         self.json_config.GRAPHITE_PORT)
 
 if __name__ == '__main__':
     x = Config(json_file='config.json')
