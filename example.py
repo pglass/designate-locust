@@ -84,6 +84,16 @@ class RedisBuffer(list):
         return self.client.set(key, value)
 
 
+class ZoneInfo(object):
+    """Stores some data from the response of a POST /zones request"""
+
+    def __init__(self, response):
+        response_json = response.json().get('zone')
+        self.zone_id = response_json['id']
+        self.zone_name = response_json['name']
+        self.project_id = response_json['project_id']
+
+
 class MyTaskSet(TaskSet):
 
     n_tenants = CONFIG.n_tenants or 1
@@ -149,7 +159,7 @@ class MyTaskSet(TaskSet):
 
         if response.status_code == 201:
             self.buffer.append((self.buffer.CREATE, response))
-            self.zone_list.append(response)
+            self.zone_list.append(ZoneInfo(response))
 
     @task
     def zone_patch(self):
@@ -157,10 +167,8 @@ class MyTaskSet(TaskSet):
         if response is None:
             return
 
-        response_json = response.json().get('zone')
-        # print "response_json", response_json
-        zone_id = response_json['id']
-        project_id = response_json['project_id']
+        zone_id = response.zone_id
+        project_id = response.project_id
 
         payload = {"zone": { "ttl": 3600 } }
 
@@ -179,11 +187,9 @@ class MyTaskSet(TaskSet):
         if response is None:
             return
 
-        response_json = response.json().get('zone')
-        # print "response_json", response_json
-        zone_id = response_json['id']
-        zone_name = response_json['name']
-        project_id = response_json['project_id']
+        zone_id = response.zone_id
+        zone_name = response.zone_name
+        project_id = response.project_id
 
         a_record_name = "{0}.{1}".format(randomize("www"), zone_name)
         payload = {"recordset" : {"name" : a_record_name,
@@ -228,7 +234,6 @@ _designate_client = DesignateClient(_client)
 
 def increase_quotas():
     print "Master started -- increasing quotas"
-    print locust.events.master_start_hatching._handlers
     payload = { "quota": { "zones": 999999999,
                            "recordset_records": 999999999,
                            "zone_records": 999999999,
@@ -242,22 +247,21 @@ def increase_quotas():
                                        headers=headers,
                                        name='/v2/quotas/tenantID')
 
-print locust.events.master_start_hatching._handlers
 locust.events.master_start_hatching += increase_quotas
 
 # Send data to graphite
 # test_time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-print "Connecting to graphite..."
-graphite_client = Graphite(CONFIG.graphite_host, CONFIG.graphite_port)
-print "done connecting to graphite"
-def report_to_graphite(client_id, data):
-    print "Got data: ", data
-    for stat in data['stats']:
-        print '-----------------------'
-        graphite_key = "locust.{0}.{1}".format(stat['method'], stat['name'])
-        for epoch_time, count in stat['num_reqs_per_sec'].iteritems():
-            graphite_client.send_text(graphite_key, count, epoch_time)
-        #print stat['method'], stat['name'], stat['num_reqs_per_sec']
-        #print stat
-
-locust.events.slave_report += report_to_graphite
+#print "Connecting to graphite..."
+#graphite_client = Graphite(CONFIG.graphite_host, CONFIG.graphite_port)
+#print "done connecting to graphite"
+#def report_to_graphite(client_id, data):
+#    print "Got data: ", data
+#    for stat in data['stats']:
+#        print '-----------------------'
+#        graphite_key = "locust.{0}.{1}".format(stat['method'], stat['name'])
+#        for epoch_time, count in stat['num_reqs_per_sec'].iteritems():
+#            graphite_client.send_text(graphite_key, count, epoch_time)
+#        #print stat['method'], stat['name'], stat['num_reqs_per_sec']
+#        #print stat
+#
+#locust.events.slave_report += report_to_graphite
