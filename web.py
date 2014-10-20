@@ -1,5 +1,7 @@
 import os
 from locust import web
+import locust.stats
+import json
 import flask
 
 module_dir = os.path.dirname(__file__)

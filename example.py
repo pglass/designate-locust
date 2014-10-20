@@ -10,8 +10,8 @@ import random
 import redis
 
 import client
+import graphite_client
 from client import DesignateClient
-from graphite_client import Graphite
 from config import Config
 
 # all of our flask web routing functions need to be in this module
@@ -249,19 +249,5 @@ def increase_quotas():
 
 locust.events.master_start_hatching += increase_quotas
 
-# Send data to graphite
-# test_time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-#print "Connecting to graphite..."
-#graphite_client = Graphite(CONFIG.graphite_host, CONFIG.graphite_port)
-#print "done connecting to graphite"
-#def report_to_graphite(client_id, data):
-#    print "Got data: ", data
-#    for stat in data['stats']:
-#        print '-----------------------'
-#        graphite_key = "locust.{0}.{1}".format(stat['method'], stat['name'])
-#        for epoch_time, count in stat['num_reqs_per_sec'].iteritems():
-#            graphite_client.send_text(graphite_key, count, epoch_time)
-#        #print stat['method'], stat['name'], stat['num_reqs_per_sec']
-#        #print stat
-#
-#locust.events.slave_report += report_to_graphite
+graphite_client.setup_graphite_communication(
+    CONFIG.graphite_host, CONFIG.graphite_port)
