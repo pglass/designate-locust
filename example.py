@@ -10,8 +10,8 @@ import random
 import redis
 
 import client
+import graphite_client
 from client import DesignateClient
-from graphite_client import Graphite
 from config import Config
 
 # all of our flask web routing functions need to be in this module
