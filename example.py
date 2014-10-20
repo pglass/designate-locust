@@ -11,7 +11,6 @@ import redis
 
 import client
 from client import DesignateClient
-from graphite_client import Graphite
 from config import Config
 
 # all of our flask web routing functions need to be in this module
@@ -228,7 +227,6 @@ _designate_client = DesignateClient(_client)
 
 def increase_quotas():
     print "Master started -- increasing quotas"
-    print locust.events.master_start_hatching._handlers
     payload = { "quota": { "zones": 999999999,
                            "recordset_records": 999999999,
                            "zone_records": 999999999,
@@ -242,22 +240,38 @@ def increase_quotas():
                                        headers=headers,
                                        name='/v2/quotas/tenantID')
 
-print locust.events.master_start_hatching._handlers
 locust.events.master_start_hatching += increase_quotas
 
-# Send data to graphite
-# test_time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-print "Connecting to graphite..."
-graphite_client = Graphite(CONFIG.graphite_host, CONFIG.graphite_port)
-print "done connecting to graphite"
-def report_to_graphite(client_id, data):
-    print "Got data: ", data
-    for stat in data['stats']:
-        print '-----------------------'
-        graphite_key = "locust.{0}.{1}".format(stat['method'], stat['name'])
-        for epoch_time, count in stat['num_reqs_per_sec'].iteritems():
-            graphite_client.send_text(graphite_key, count, epoch_time)
-        #print stat['method'], stat['name'], stat['num_reqs_per_sec']
-        #print stat
-
-locust.events.slave_report += report_to_graphite
+graphite_client.setup_graphite_communication(
+    CONFIG.graphite_host, CONFIG.graphite_port)
+## Send data to graphite
+## test_time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+##print "Connecting to graphite..."
+##graphite_client = Graphite(CONFIG.graphite_host, CONFIG.graphite_port)
+##print "done connecting to graphite"
+#import graphite_client
+#def graphite_producer(client_id, data):
+#    print "Got data: ", data, 'from client', client_id
+#    for stat in data['stats']:
+#        print '-----------------------'
+#        # graphite_key = "locust.{0}.{1}".format(stat['method'], stat['name'])
+#        graphite_key = "locust.{0}.total_requests.{1}".format(
+#            "{0}-{1}".format(stat['method'], stat['name'].replace('/', '-')),
+#            client_id)
+#        for epoch_time, count in stat['num_reqs_per_sec'].iteritems():
+#            print 'graphite_producer'
+#            graphite_data = "{0} {1} {2}\n".format(graphite_key, count, epoch_time)
+#            #graphite_client.send_text(graphite_key, count, epoch_time)
+#            graphite_client.graphite_queue.put(graphite_data)
+#        #print stat['method'], stat['name'], stat['num_reqs_per_sec']
+#        #print stat
+#
+## detect whether we're a master or slave node
+#import sys
+#is_master = '--master' in sys.argv
+#is_slave = '--slave' in sys.argv
+#is_neither = not is_master and not is_slave
+#
+#if not is_slave:
+#    gevent.spawn(graphite_client.graphite_worker, CONFIG.graphite_host, CONFIG.graphite_port)
+#    locust.events.slave_report += graphite_producer
