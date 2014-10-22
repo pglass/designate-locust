@@ -19,6 +19,8 @@ from web import *
 
 CONFIG = Config(json_file='config.json')
 
+setup_authentication(CONFIG.username, CONFIG.password)
+
 
 def get_timestamp():
     return str(datetime.datetime.now())

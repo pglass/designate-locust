@@ -17,6 +17,8 @@ class JsonConfig(object):
     MAX_WAIT_KEY = 'max_wait'
     GRAPHITE_HOST = 'graphite_host'
     GRAPHITE_PORT = 'graphite_port'
+    LOCUST_USERNAME = 'locust_username'
+    LOCUST_PASSWORD = 'locust_password'
 
     def __init__(self, json_data):
         self.json = json_data
@@ -45,6 +47,8 @@ class EnvironmentConfig(object):
     MAX_WAIT_KEY = 'LOCUST_MAX_WAIT'
     GRAPHITE_HOST = 'LOCUST_GRAPHITE_HOST'
     GRAPHITE_PORT = 'LOCUST_GRAPHITE_PORT'
+    LOCUST_USERNAME = 'LOCUST_USERNAME'
+    LOCUST_PASSWORD = 'LOCUST_PASSWORD'
 
     def get(self, key):
         return os.environ.get(key)
@@ -139,6 +143,17 @@ class Config(object):
     def graphite_port(self):
         return self._get(self.env_config.GRAPHITE_PORT,
                          self.json_config.GRAPHITE_PORT)
+
+    @property
+    def username(self):
+        return self._get(self.env_config.LOCUST_USERNAME,
+                         self.json_config.LOCUST_USERNAME)
+
+    @property
+    def password(self):
+        return self._get(self.env_config.LOCUST_PASSWORD,
+                         self.json_config.LOCUST_PASSWORD)
+
 
 if __name__ == '__main__':
     x = Config(json_file='config.json')
