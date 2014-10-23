@@ -6,6 +6,7 @@ import random
 from locust import web
 import locust.stats
 import flask
+from flask import request
 from flask.ext.httpauth import HTTPDigestAuth
 
 """
