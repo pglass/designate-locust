@@ -16,7 +16,12 @@ pip install -U --force --no-use-wheel pip
 hash -r
 pip install -U --force --no-use-wheel setuptools
 pip install -U distribute
-pip install fake-factory locustio pyzmq redis pygal Flask-HTTPAuth
+pip install fake-factory pyzmq redis pygal Flask-HTTPAuth
+
+git clone https://github.com/pglass/locust.git
+cd locust
+pip install .
+cd ..
 
 # install matplotlib dependencies
 pip install python-dateutil six

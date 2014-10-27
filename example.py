@@ -3,6 +3,7 @@ from locust import TaskSet
 from locust import task
 from locust.clients import HttpSession
 import locust.events
+import locust.config
 from faker import Factory
 import json
 import datetime
@@ -20,6 +21,8 @@ from web import *
 CONFIG = Config(json_file='config.json')
 
 setup_authentication(CONFIG.username, CONFIG.password)
+
+locust.config.RESET_STATS_AFTER_HATCHING = False
 
 
 def get_timestamp():
