@@ -12,10 +12,12 @@ import redis
 
 import client
 import graphite_client
+import persistence
 from client import DesignateClient
 from config import Config
 
 # all of our flask web routing functions need to be in this module
+import locust.web
 from web import *
 
 CONFIG = Config(json_file='config.json')
@@ -256,3 +258,5 @@ locust.events.master_start_hatching += increase_quotas
 
 graphite_client.setup_graphite_communication(
     CONFIG.graphite_host, CONFIG.graphite_port)
+
+persistence.setup_persistence()

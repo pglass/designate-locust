@@ -4,6 +4,8 @@ import gevent
 from gevent.socket import socket
 from gevent.queue import Queue
 
+import insight
+
 graphite_queue = Queue()
 
 
@@ -61,12 +63,7 @@ def graphite_producer(client_id, data):
         graphite_queue.put(graphite_data)
 
 def setup_graphite_communication(graphite_host, graphite_port):
-    # detect whether we're a master or slave node
-    is_master = '--master' in sys.argv
-    is_slave = '--slave' in sys.argv
-    is_neither = not is_master and not is_slave
-
     # only the master sends data to graphite
-    if not is_slave:
+    if not insight.is_slave():
         gevent.spawn(graphite_worker, graphite_host, graphite_port)
         locust.events.slave_report += graphite_producer

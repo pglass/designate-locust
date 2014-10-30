@@ -2,12 +2,16 @@ import os
 import json
 import string
 import random
+from datetime import datetime
 
 from locust import web
 import locust.stats
 import flask
 from flask import request
 from flask.ext.httpauth import HTTPDigestAuth
+
+import persistence
+
 
 """
 I need a way to retrofit Flask view/routing functions in locust.web to require
@@ -56,6 +60,16 @@ def setup_authentication(authorized_username, authorized_password):
 
 module_dir = os.path.dirname(__file__)
 
+
+# By default, jinja uses a directory somewhere in the Locust codebase
+# when it looks for templates. This adds our local templates directory.
+# Be careful about name overlaps with Locust's default template filenames.
+import jinja2
+web.app.jinja_loader = jinja2.ChoiceLoader([
+    web.app.jinja_loader,
+    jinja2.FileSystemLoader([module_dir.rstrip('/') + '/templates'])
+])
+
 @web.app.route('/plots/line.svg')
 def line_plot():
     return flask.send_from_directory(module_dir, 'line.svg')
@@ -71,3 +85,40 @@ def scatter_plot():
 @web.app.route('/plots/scatter.png')
 def scatter_png():
     return flask.send_from_directory(module_dir, 'scatter.png')
+
+@web.app.route('/reports')
+def reports():
+    """Return a page with a listing of reports."""
+    stats_files = persistence.list_stats_files()
+    if not stats_files:
+        return "No reports found"
+
+    def extract_timestamp(filename):
+        head, tail = os.path.split(filename.strip('/'))
+        return int(tail.strip('stats').strip('.json')), tail
+
+    time_pairs = [(datetime.fromtimestamp(x), x, filename)
+                  for x, filename in map(extract_timestamp, stats_files)]
+    time_pairs.sort(key=lambda t: -t[1])
+    return flask.render_template('reports_index.html', time_pairs=time_pairs)
+
+@web.app.route('/reports/<name>')
+def report(name):
+    """Return a summary page for a particular run."""
+    stats_file = os.path.abspath("{0}/{1}".format(
+        persistence.stats_dir, name if name.endswith('.json') else name + '.json'))
+    if not os.path.exists(stats_file):
+        return flask.abort(404)
+
+    stats = json.loads(open(stats_file, 'r').read())
+    if name.endswith('.json'):
+        return flask.send_file(stats_file, mimetype='application/json')
+
+    start_datetime = datetime.fromtimestamp(stats['start_time'])
+    duration = (datetime.fromtimestamp(round(stats['last_request_timestamp']))
+                - datetime.fromtimestamp(round(stats['start_time'])))
+    info = {
+        "start_datetime": start_datetime,
+        "duration": duration
+    }
+    return flask.render_template('report.html', stats=stats, info=info)

@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<title>Reports</title>
+<ul>
+{% for datetime, timestamp, filename in time_pairs %}
+    <li>{{ datetime.strftime("%c") }}
+        [<a href="/reports/{{ filename|replace('.json', '') }}">report</a>]
+        [<a href="/reports/{{ filename }}">json</a>]
+    </li>
+{% endfor %}
+</ul>
