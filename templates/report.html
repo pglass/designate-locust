@@ -31,7 +31,7 @@
                 </div>
                 <div class="top_box box_fail box_running" id="box_fail">
                     <div class="label">FAILURES</div>
-                    <div class="value"><span id="fail_ratio">{{ (100 * stats.num_failures / stats.num_requests)|round(1) }}</span>%</div>
+                    <div class="value"><span id="fail_ratio">{{ (100 * stats.entries[-1].num_failures / stats.entries[-1].num_requests)|round(1) }}</span>%</div>
                 </div>
                 <div class="top_box box_stop box_running" id="box_stop">
                     <a href="/stop"><img src="/static/img/stop.png" style="border:0;"></a>
