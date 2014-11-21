@@ -27,7 +27,7 @@ class DesignateClient(object):
     #############################################
     def post_server(self, *args, **kwargs):
         self._prepare_headers(kwargs)
-        self.client.post("/v1/servers", *args, **kwargs)
+        return self.client.post("/v1/servers", *args, **kwargs)
 
     #############################################
     # Quotas calls
@@ -35,7 +35,7 @@ class DesignateClient(object):
     def patch_quotas(self, tenant, *args, **kwargs):
         self._prepare_headers(kwargs)
         url = "/v2/quotas/{0}".format(tenant)
-        self.client.patch(url, *args, **kwargs)
+        return self.client.patch(url, *args, **kwargs)
 
     #############################################
     # Zone calls
@@ -45,9 +45,14 @@ class DesignateClient(object):
         url = "/v2/zones/{0}".format(zone_id)
         return self.client.get(url, *args, **kwargs)
 
+    def get_zone_by_name(self, zone_name, *args, **kwargs):
+        self._prepare_headers(kwargs)
+        url = "/v2/zones?name={0}".format(zone_name)
+        return self.client.get(url, *args, **kwargs)
+
     def list_zones(self, *args, **kwargs):
         self._prepare_headers(kwargs)
-        return self.client.get("/v2/zones")
+        return self.client.get("/v2/zones", *args, **kwargs)
 
     def post_zone(self, *args, **kwargs):
         self._prepare_headers(kwargs)
@@ -62,6 +67,18 @@ class DesignateClient(object):
         self._prepare_headers(kwargs)
         url = "/v2/zones/{0}".format(zone_id)
         return self.client.delete(url, *args, **kwargs)
+
+    def import_zone(self, data, *args, **kwargs):
+        """data should be the text from a zone file."""
+        kwargs["headers"] = {"Content-Type": "text/dns"}
+        self._prepare_headers(kwargs)
+        return self.client.post("/v2/zones", data=data, *args, **kwargs)
+
+    def export_zone(self, zone_id, *args, **kwargs):
+        kwargs['headers']['Accept'] = 'text/dns'
+        self._prepare_headers(kwargs)
+        url = "/v2/zones/{0}".format(zone_id)
+        return self.client.get(url, *args, **kwargs)
 
     #############################################
     # Recordset calls
