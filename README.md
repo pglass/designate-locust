@@ -8,7 +8,15 @@ Installation
 
 Optionally, create a virtual environment to work in first.
 
-    pip install fake-factory locustio pyzmq redis
+Install some dependencies:
+
+    pip install fake-factory pyzmq redis
+
+Install Locust. This relies on a fork with a couple of changes:
+
+    git clone https://github.com/pglass/locust
+    cd locust
+    pip install .
 
 Or see `setup.sh` for an installation sequence (on Ubuntu 12.04).
 
@@ -17,34 +25,9 @@ Usage
 
 #### Config ####
 
-Configuration values are specified either through environment variable or a json file, which must be named `config.json`. Any values not found in environment variables are then looked for in the json file.
+For example.py, config values are specified in a json file, or through environment variables (see config.py).
 
-`config.json`:
-
-    {
-        "redis_host": "localhost",
-        "redis_port": 6379,
-        "redis_password": null,
-        "designate_host": "http://192.168.33.20:9001",
-        "n_tenants": 10,
-        "min_wait": 250,
-        "max_wait": 750,
-        "graphite_host": "192.168.33.21",
-        "graphite_port": 2023,
-        "locust_username": "imauser",
-        "locust_password": "imapassword"
-    }
-
-Or, using environment variables:
-
-    LOCUST_REDIS_HOST=localhost   
-    LOCUST_REDIS_PORT=6379    
-    LOCUST_REDIS_PASSWORD=password
-    LOCUST_DESIGNATE_HOST=http://192.168.33.20:9001
-    ...
-
-
-See `config.py` for definitions of all the key names used.
+For accurate.py, config values are specifed in a Python file (see accurate_config.py).
 
 #### Web Interface ####
 
