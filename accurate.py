@@ -16,6 +16,7 @@ import redis
 import client
 import graphite_client
 import persistence
+import insight
 from client import DesignateClient
 from web import *
 from datagen import *
@@ -83,7 +84,6 @@ def get_records_data(zone_infos, n, rtype):
                                       "type" : "A",
                                       "ttl" : 3600,
                                       "records" : [ ip ] }}
-            headers = _prepare_headers_w_tenant(zone_info.tenant)
             #print "%s creating A record %s --> %s" % (zone_info.tenant, zone_info.name, ip)
             resp = _designate_client.post_recordset(
                 zone_info.id, data=json.dumps(payload),
@@ -152,8 +152,6 @@ class TestData(object):
                    len(self.record_get_data), len(self.record_delete_data),
                    len(self.record_update_data)))
 
-LARGE_DATA = TestData(CONFIG.large_tenants)
-SMALL_DATA = TestData(CONFIG.small_tenants)
 
 def refresh_test_data(previous, current):
     if current == locust.runners.STATE_HATCHING:
@@ -165,8 +163,11 @@ def refresh_test_data(previous, current):
         SMALL_DATA.refresh(CONFIG.n_small_domains_per_tenant, CONFIG.n_small_records_per_domain)
         print "Small: %s" % SMALL_DATA
 
-locust.events.state_changed += refresh_test_data
 
+if not insight.is_master():
+    LARGE_DATA = TestData(CONFIG.large_tenants)
+    SMALL_DATA = TestData(CONFIG.small_tenants)
+    locust.events.state_changed += refresh_test_data
 
 class Tasks(TaskSet):
 
