@@ -385,7 +385,7 @@ class Tasks(TaskSet):
 
     @task
     def remove_record(self):
-        """DELETE /zones/zoneID/recordsets"""
+        """DELETE /zones/zoneID/recordsets/recordsetID"""
         record_info = self.pick_record_for_delete()
         if not record_info:
             print "remove_record: got None record_info"
@@ -394,7 +394,7 @@ class Tasks(TaskSet):
         resp = self.designate_client.delete_recordset(
             record_info.zone_id,
             record_info.record_id,
-            name='/v2/zones/zoneID/recordsets',
+            name='/v2/zones/zoneID/recordsets/recordsetID',
             headers=headers)
         if self._use_redis and resp.ok:
             zone_resp = self.designate_client.get_zone(record_info.zone_id,
