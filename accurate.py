@@ -12,11 +12,13 @@ import locust.events
 import locust.config
 
 import redis
+import gevent
 
 import client
 import graphite_client
 import persistence
 import insight
+import greenlet_manager
 from client import DesignateClient
 from web import *
 from datagen import *
@@ -169,6 +171,18 @@ if not insight.is_master():
     SMALL_DATA = TestData(CONFIG.small_tenants)
     locust.events.state_changed += refresh_test_data
 
+    # the greenlet_manager is used to keep track of greenlets spawned to poll
+    # note: it's hard to ensure cleanup_greenlets gets run before the stats
+    # are persisted to a file...
+    GREENLET_MANAGER = greenlet_manager.GreenletManager()
+    # ensure cleanup when the test is stopped
+    locust.events.locust_stop_hatching += \
+        lambda: GREENLET_MANAGER.cleanup_greenlets()
+    # ensure cleanup on interrupts
+    locust.events.quitting += \
+        lambda: GREENLET_MANAGER.cleanup_greenlets()
+
+
 class Tasks(TaskSet):
 
     def __init__(self, test_data, *args, **kwargs):
@@ -195,9 +209,6 @@ class Tasks(TaskSet):
             locust.events.locust_stop_hatching += lambda: self.buffer.flush()
             # ensure cleanup on interrupts
             locust.events.quitting += lambda: self.buffer.flush()
-
-
-
 
     def pick_zone_for_get(self):
         """Returns a tuple (tenant, api_key, zone_id, zone_name)"""
@@ -261,7 +272,9 @@ class Tasks(TaskSet):
     def list_domains(self):
         """GET /zones"""
         headers = self._prepare_headers_w_tenant()
-        self.designate_client.list_zones(name='/v2/zones', headers=headers)
+        self.designate_client.list_zones(name='/v2/zones', headers=headers,
+            # at the time of this writing, designate didn't limit by default
+            params={'limit': 100})
 
     @task
     def export_domain(self):
@@ -276,44 +289,130 @@ class Tasks(TaskSet):
     @task
     def create_domain(self):
         """POST /zones"""
+        gevent.spawn(
+            GREENLET_MANAGER.tracked_greenlet,
+            lambda: self._do_create_domain(interval=2),
+            timeout=60
+        )
+
+    def _do_create_domain(self, interval):
         zone, email = random_zone_email()
         headers = self._prepare_headers_w_tenant()
         payload = {"zone": { "name": zone,
                              "email": email,
                              "ttl": 7200 }}
-        response = self.designate_client.post_zone(data=json.dumps(payload),
-                                                   name='/v2/zones',
-                                                   headers=headers)
-        if self._use_redis and response.ok:
-            self.buffer.append((self.buffer.CREATE, response))
+
+        # use the magical with block to let us specify when the request has
+        # succeeded. this lets us poll until the status is ACTIVE or ERROR
+        with self.designate_client.post_zone(data=json.dumps(payload),
+                                             name='/v2/zones',
+                                             headers=headers,
+                                             catch_response=True) as post_resp:
+            if self._use_redis and post_resp.ok:
+                self.buffer.append((self.buffer.CREATE, post_resp))
+
+            if not post_resp.ok:
+                post_resp.failure("Failed with status code %s" % post_resp.status_code)
+                return
+
+            api_call = lambda: self.designate_client.get_zone(
+                zone_id=post_resp.json()['zone']['id'],
+                headers=headers,
+                name='/v2/zones (status of POST /v2/zones)')
+            self._poll_until_active_or_error(api_call, interval,
+                post_resp.success, post_resp.failure)
+
+    def _poll_until_active_or_error(self, api_call, interval, success_function,
+                                    failure_function):
+        # NOTE: this is assumed to be run in a separate greenlet. We use
+        # `while True` here, and use gevent to manage a timeout or to kill
+        # the greenlet externally.
+        while True:
+            resp = api_call()
+            if resp.ok and resp.json()['zone']['status'] == 'ACTIVE':
+                success_function()
+                break
+            elif resp.ok and resp.json()['zone']['status'] == 'ERROR':
+                failure_function("Failed - saw ERROR status")
+                break
+            gevent.sleep(interval)
 
     @task
     def modify_domain(self):
         """PATCH /zones/zoneID"""
+        gevent.spawn(
+            GREENLET_MANAGER.tracked_greenlet,
+            lambda: self._do_modify_domain(interval=2),
+            timeout=60
+        )
+
+    def _do_modify_domain(self, interval):
         zone_info = self.pick_zone_for_get()
         headers = self._prepare_headers_w_tenant(zone_info.tenant)
         payload = { "zone": { "name": zone_info.name,
                               "email": ("update@" + zone_info.name).strip('.'),
                               "ttl": random.randint(2400, 7200) }}
-        resp = self.designate_client.patch_zone(zone_info.id,
-                                                data=json.dumps(payload),
-                                                headers=headers,
-                                                name='/v2/zones/zoneID')
-        if self._use_redis and resp.ok:
-            self.buffer.append((self.buffer.UPDATE, resp))
+        with self.designate_client.patch_zone(
+                zone_info.id, data=json.dumps(payload), headers=headers,
+                name='/v2/zones/zoneID', catch_response=True) as patch_resp:
+
+            if self._use_redis and resp.ok:
+                self.buffer.append((self.buffer.UPDATE, resp))
+
+            if not patch_resp.ok:
+                patch_resp.failure('Failure - got %s status code' % patch_resp.status_code)
+                return
+
+            api_call = lambda: self.designate_client.get_zone(
+                zone_id=zone_info.id,
+                headers=headers,
+                name='/v2/zones (status of PATCH /v2/zones/zoneID)')
+            self._poll_until_active_or_error(
+                api_call=api_call,
+                interval=interval,
+                success_function=patch_resp.success,
+                failure_function=patch_resp.failure)
 
     @task
     def remove_domain(self):
         """DELETE /zones/zoneID"""
+        gevent.spawn(
+            GREENLET_MANAGER.tracked_greenlet,
+            lambda: self._do_remove_domain(interval=2),
+            timeout=60
+        )
+
+    def _do_remove_domain(self, interval):
         zone_info = self.pick_zone_for_delete()
         if zone_info is None:
             print "remove_domain: got None zone_info"
             return
 
         headers = self._prepare_headers_w_tenant(zone_info.tenant)
-        self.designate_client.delete_zone(zone_info.id,
-                                          headers=headers,
-                                          name='/v2/zones/zoneID')
+        with self.designate_client.delete_zone(
+                zone_info.id, headers=headers, name='/v2/zones/zoneID',
+                catch_response=True) as del_resp:
+            api_call = lambda: self.designate_client.get_zone(
+                    zone_info.id, headers=headers, catch_response=True,
+                    name='/v2/zones (status of DELETE /v2/zones/zoneID)')
+            self._poll_until_404(api_call, interval,
+                success_function=del_resp.success,
+                failure_function=del_resp.failure)
+
+    def _poll_until_404(self, api_call, interval, success_function,
+                        failure_function):
+        # NOTE: this is assumed to be run in a separate greenlet. We use
+        # `while True` here, and use gevent to manage a timeout or to kill
+        # the greenlet externally.
+        while True:
+            with api_call() as resp:
+                if resp.status_code == 404:
+                    # ensure the 404 isn't marked as a failure in the report
+                    resp.success()
+                    # mark the original (delete) request as a success
+                    success_function()
+                    return
+            gevent.sleep(interval)
 
     @task
     def list_records(self):
@@ -321,7 +420,9 @@ class Tasks(TaskSet):
         tenant, api_key, zone_id, zone_name = self.pick_zone_for_get()
         headers=self._prepare_headers_w_tenant(tenant)
         resp = self.designate_client.list_recordsets(
-            zone_id, name='/v2/zones/zoneID/recordsets', headers=headers)
+            zone_id, name='/v2/zones/zoneID/recordsets', headers=headers,
+            # at the time of this writing, designate didn't limit by default
+            params={'limit': 100})
 
     @task
     def get_record(self):
