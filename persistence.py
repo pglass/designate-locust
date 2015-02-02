@@ -36,7 +36,10 @@ def get_stats():
                  "median_response_time": stats.median_response_time,
                  "avg_content_length": stats.avg_content_length, }
 
+    # add the per-requests stats
     entries = [to_stats_dict(stats) for stats in global_stats.entries.itervalues()]
+
+    # add aggregated stats across requests
     entries.append(to_stats_dict(
         global_stats.aggregated_stats(full_request_history=True)))
 

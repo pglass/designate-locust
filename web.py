@@ -59,6 +59,7 @@ def setup_authentication(authorized_username, authorized_password):
         pass
 
 module_dir = os.path.dirname(__file__)
+images_dir = os.path.join(module_dir, 'images')
 
 
 # By default, jinja uses a directory somewhere in the Locust codebase
@@ -102,6 +103,12 @@ def reports():
     time_pairs.sort(key=lambda t: -t[1])
     return flask.render_template('reports_index.html', time_pairs=time_pairs)
 
+@web.app.route('/images/<name>')
+def image(name):
+    print module_dir
+    print name
+    return flask.send_from_directory(module_dir, name)
+
 @web.app.route('/reports/<name>')
 def report(name):
     """Return a summary page for a particular run."""
@@ -114,6 +121,7 @@ def report(name):
     if name.endswith('.json'):
         return flask.send_file(stats_file, mimetype='application/json')
 
+    # compute some things that are easier to do here than in a jinja template
     start_datetime = datetime.fromtimestamp(stats['start_time'])
     duration = (datetime.fromtimestamp(round(stats['last_request_timestamp']))
                 - datetime.fromtimestamp(round(stats['start_time'])))
@@ -121,4 +129,5 @@ def report(name):
         "start_datetime": start_datetime,
         "duration": duration
     }
-    return flask.render_template('report.html', stats=stats, info=info)
+    return flask.render_template('report.html', stats=stats, info=info,
+            propagation_plot='/../images/timmayy.jpg')

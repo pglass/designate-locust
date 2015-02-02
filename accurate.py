@@ -393,8 +393,8 @@ class Tasks(TaskSet):
                 zone_info.id, headers=headers, name='/v2/zones/zoneID',
                 catch_response=True) as del_resp:
             api_call = lambda: self.designate_client.get_zone(
-                    zone_info.id, headers=headers, catch_response=True,
-                    name='/v2/zones (status of DELETE /v2/zones/zoneID)')
+                zone_info.id, headers=headers, catch_response=True,
+                name='/v2/zones (status of DELETE /v2/zones/zoneID)')
             self._poll_until_404(api_call, interval,
                 success_function=del_resp.success,
                 failure_function=del_resp.failure)
