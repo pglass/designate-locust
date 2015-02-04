@@ -14,8 +14,15 @@ import locust.stats
 
 import insight
 
-# Directory in which to persist statistics
+
+def ensure_dir_exists(d):
+    if not os.path.exists(d):
+        os.mkdir(d)
+
 stats_dir = './saved_stats'
+images_dir = './images'
+ensure_dir_exists(stats_dir)
+ensure_dir_exists(images_dir)
 
 # Tracks the maximum number of users during load generation
 max_users = 0
@@ -62,13 +69,9 @@ def get_stats():
 
     return stats
 
-
 def save_stats_to_file(stats, timestamp):
     """Saves stats to a json file, so stats must be json-serializable. The
     filename is 'stats<timestamp>' and is placed in persistence.stats_dir."""
-    if not os.path.exists(stats_dir):
-        os.mkdir(stats_dir)
-
     stats_filepath = "{0}/stats{1}.json".format(stats_dir, timestamp)
     print "Writing stats to file: {0}".format(os.path.abspath(stats_filepath))
     with open(stats_filepath, 'w') as f:

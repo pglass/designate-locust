@@ -105,9 +105,8 @@ def reports():
 
 @web.app.route('/images/<name>')
 def image(name):
-    print module_dir
-    print name
-    return flask.send_from_directory(module_dir, name)
+    d = os.path.join(module_dir, images_dir)
+    return flask.send_from_directory(d, name)
 
 @web.app.route('/reports/<name>')
 def report(name):
@@ -134,5 +133,4 @@ def report(name):
         "duration": duration
     }
     return flask.render_template('report.html', stats=stats, timeinfo=timeinfo,
-            #propagation_plot='/../images/timmayy.jpg')
-            propagation_plot='../images/howarddealwithit.gif')
+            propagation_plot=stats['digaas'].get('plot_file'))

@@ -14,6 +14,7 @@ There are two things here:
 import locust
 import requests
 import json
+import os
 import shutil
 import time
 import uuid
@@ -96,7 +97,9 @@ def fetch_plot(client, start_time, end_time, output_filename):
             print "image_id = %s" % image_id
             image_resp = client.get_image(image_id)
             print "writing to file %s" % output_filename
-            with open(output_filename, 'wb') as f:
+            # save all images to the images directory
+            output_path = os.path.join(persistence.images_dir, output_filename)
+            with open(output_path, 'wb') as f:
                 shutil.copyfileobj(image_resp.raw, f)
             break
 
