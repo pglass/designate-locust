@@ -16,6 +16,7 @@ import gevent
 
 import client
 import graphite_client
+import digaas_integration
 import persistence
 import insight
 import greenlet_manager
@@ -44,6 +45,13 @@ RecordTuple = namedtuple('RecordTuple', ['tenant', 'api_key', 'zone_id',
 
 _client = HttpSession(CONFIG.designate_host)
 _designate_client = DesignateClient(_client)
+_digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
+
+# use digaas to externally poll the nameserver(s) to record zone propagation
+# times through Designate's stack
+if CONFIG.use_digaas and not insight.is_slave():
+    digaas_integration.setup_digaas_integration(_digaas_client)
+
 
 def _prepare_headers_w_tenant(tenant):
     return { client.ROLE_HEADER: 'admin',
@@ -183,16 +191,38 @@ if not insight.is_master():
         lambda: GREENLET_MANAGER.cleanup_greenlets()
 
 
+EPOCH_START = datetime.datetime(1970, 1, 1)
+def to_timestamp(dt):
+    """dt is a datetime object which must be in UTC"""
+    return (dt - EPOCH_START).total_seconds()
+
+def parse_created_at(created_at):
+    """Parse the given time, which is in iso format with 'T' and milliseconds:
+        2015-02-02T20:07:53.000000
+    We're assuming this time is UTC.
+    Return a datetime instance.
+    """
+    # assuming the created at time looks like:
+    # this start time is what digaas uses when computing the
+    # propagation time to the nameserver
+    #
+    # We're assuming this time is UTC.
+    return datetime.datetime.strptime(created_at, '%Y-%m-%dT%H:%M:%S.%f')
+
+
 class Tasks(TaskSet):
 
     def __init__(self, test_data, *args, **kwargs):
         super(Tasks, self).__init__(*args, **kwargs)
+
 
         self.designate_client = DesignateClient(self.client)
 
         self.test_data = test_data
 
         self._use_redis = CONFIG.use_redis
+
+
         if self._use_redis:
             # initialize redis client
             self.redis_client = redis.StrictRedis(
@@ -209,6 +239,11 @@ class Tasks(TaskSet):
             locust.events.locust_stop_hatching += lambda: self.buffer.flush()
             # ensure cleanup on interrupts
             locust.events.quitting += lambda: self.buffer.flush()
+
+        if CONFIG.use_digaas:
+            self.digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
+
+
 
     def pick_zone_for_get(self):
         """Returns a tuple (tenant, api_key, zone_id, zone_name)"""
@@ -308,6 +343,27 @@ class Tasks(TaskSet):
                                              name='/v2/zones',
                                              headers=headers,
                                              catch_response=True) as post_resp:
+
+            if CONFIG.use_digaas and post_resp.ok:
+                print "Created domain:"
+                # digaas uses the start_time when computing the propagation
+                # time to the nameserver. We're assuming this time is UTC.
+                start_time = parse_created_at(post_resp.json()['zone']['created_at'])
+                print "  start_time = %s" % start_time
+
+                for nameserver in CONFIG.nameservers:
+                    print "  POST digaas - %s" % nameserver
+                    # this will start digaas a polling until the zone shows up
+                    # on the nameserver
+                    self.digaas_client.post_poll_request(
+                        nameserver = nameserver,
+                        zone_name = post_resp.json()['zone']['name'],
+                        serial = post_resp.json()['zone']['serial'],
+                        start_time = to_timestamp(start_time),
+                        condition = "serial_not_lower",
+                        timeout = CONFIG.digaas_timeout,
+                        frequency = CONFIG.digaas_interval)
+
             if self._use_redis and post_resp.ok:
                 self.buffer.append((self.buffer.CREATE, post_resp))
 
@@ -356,6 +412,27 @@ class Tasks(TaskSet):
                 zone_info.id, data=json.dumps(payload), headers=headers,
                 name='/v2/zones/zoneID', catch_response=True) as patch_resp:
 
+            if CONFIG.use_digaas and patch_resp.ok:
+                print "Updating zone %s" % zone_info.name
+                # digaas uses the start_time when computing the propagation
+                # time to the nameserver. We're assuming this time is UTC.
+                start_time = parse_created_at(patch_resp.json()['zone']['updated_at'])
+                print "  start_time = %s" % start_time
+
+                for nameserver in CONFIG.nameservers:
+                    print "  POST digaas - %s" % nameserver
+
+                    # this will start digaas a polling until the zone disappears
+                    # from the nameserver
+                    self.digaas_client.post_poll_request(
+                        nameserver = nameserver,
+                        zone_name = patch_resp.json()['zone']['name'],
+                        serial = patch_resp.json()['zone']['serial'],
+                        start_time = to_timestamp(start_time),
+                        condition = "serial_not_lower",
+                        timeout = CONFIG.digaas_timeout,
+                        frequency = CONFIG.digaas_interval)
+
             if self._use_redis and resp.ok:
                 self.buffer.append((self.buffer.UPDATE, resp))
 
@@ -392,6 +469,27 @@ class Tasks(TaskSet):
         with self.designate_client.delete_zone(
                 zone_info.id, headers=headers, name='/v2/zones/zoneID',
                 catch_response=True) as del_resp:
+
+            if CONFIG.use_digaas and del_resp.ok:
+                # digaas uses the start_time when computing the propagation
+                # time to the nameserver. We're assuming this time is UTC.
+                #
+                # designate gives us no response for a delete which means we
+                # get no deleted_at time or serial
+                start_time = datetime.datetime.now()
+
+                for nameserver in CONFIG.nameservers:
+                    # this will start digaas a polling until the zone disappears
+                    # from the nameserver
+                    self.digaas_client.post_poll_request(
+                        nameserver = nameserver,
+                        zone_name = zone_info.name,
+                        serial = 0,
+                        start_time = to_timestamp(start_time),
+                        condition = "zone_removed",
+                        timeout = CONFIG.digaas_timeout,
+                        frequency = CONFIG.digaas_interval)
+
             api_call = lambda: self.designate_client.get_zone(
                 zone_info.id, headers=headers, catch_response=True,
                 name='/v2/zones (status of DELETE /v2/zones/zoneID)')

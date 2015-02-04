@@ -4,8 +4,9 @@ import gevent
 class GreenletManager(list):
 
     def tracked_greenlet(self, f, timeout=10):
-        """A wrapper function that stores the current greenlet only while the
-        greenlet is running to allow us to cleanup our greenlets afterwards.
+        """A wrapper function that stores the current greenlet in list in order
+        to keep track of our asynchronous request 'threads'. The greenlet
+        remains in the list until it terminates, or until an explicit cleanup.
 
         Usage:
             for _ in xrange(...):

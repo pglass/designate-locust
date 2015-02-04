@@ -6,6 +6,15 @@ reset_stats = False
 
 designate_host = 'http://192.168.33.20:9001'
 
+use_digaas = True
+digaas_endpoint = 'http://localhost:9090'
+nameservers = [
+    '192.168.33.20',
+]
+digaas_timeout = 300
+digaas_interval = 10
+
+
 use_redis = True
 redis_host = "localhost"
 redis_port = 6379

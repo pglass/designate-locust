@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <head>
     <link rel="stylesheet" type="text/css" href="/static/style.css" media="screen">
-    <title>{{ info.start_datetime.strftime("%c") }}</title>
+    <title>{{ timeinfo.start_datetime.strftime("%c") }}</title>
 </head>
 <body class="stopped">
 
@@ -12,7 +12,7 @@
             <div class="boxes">
                 <div class="top_box box_rps box_running">
                     <div class="label">DURATION</div>
-                    <div class="value" >{{ info.duration|string }}</div>
+                    <div class="value" >{{ timeinfo.duration|string }}</div>
                 </div>
                 <div class="top_box box_rps box_running">
                     <div class="label"># REQUESTS</div>

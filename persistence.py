@@ -20,6 +20,9 @@ stats_dir = './saved_stats'
 # Tracks the maximum number of users during load generation
 max_users = 0
 
+# an event that alerts others who want to persist something when a test stops
+persisting_info = locust.events.EventHook()
+
 def get_stats():
     """Returns a dictionary with the statistics we want to persist."""
     global_stats = locust.stats.global_stats
@@ -43,7 +46,7 @@ def get_stats():
     entries.append(to_stats_dict(
         global_stats.aggregated_stats(full_request_history=True)))
 
-    return {
+    stats = {
         'entries': entries,
         'errors': [error.to_dict() for error in global_stats.errors.itervalues()],
         'num_requests': global_stats.num_requests,
@@ -53,6 +56,12 @@ def get_stats():
         'start_time': global_stats.start_time,
         'max_users': max_users,
     }
+
+    # grab extra information from anyone hook in via this event
+    persisting_info.fire(stats=stats)
+
+    return stats
+
 
 def save_stats_to_file(stats, timestamp):
     """Saves stats to a json file, so stats must be json-serializable. The

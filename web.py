@@ -2,7 +2,7 @@ import os
 import json
 import string
 import random
-from datetime import datetime
+import datetime
 
 from locust import web
 import locust.stats
@@ -98,7 +98,7 @@ def reports():
         head, tail = os.path.split(filename.strip('/'))
         return int(tail.strip('stats').strip('.json')), tail
 
-    time_pairs = [(datetime.fromtimestamp(x), x, filename)
+    time_pairs = [(datetime.datetime.fromtimestamp(x), x, filename)
                   for x, filename in map(extract_timestamp, stats_files)]
     time_pairs.sort(key=lambda t: -t[1])
     return flask.render_template('reports_index.html', time_pairs=time_pairs)
@@ -112,6 +112,9 @@ def image(name):
 @web.app.route('/reports/<name>')
 def report(name):
     """Return a summary page for a particular run."""
+
+    # the name is something like stats132486733[.json] which contains a dump of
+    # data about a test run that we use to render a jinja template.
     stats_file = os.path.abspath("{0}/{1}".format(
         persistence.stats_dir, name if name.endswith('.json') else name + '.json'))
     if not os.path.exists(stats_file):
@@ -121,13 +124,15 @@ def report(name):
     if name.endswith('.json'):
         return flask.send_file(stats_file, mimetype='application/json')
 
-    # compute some things that are easier to do here than in a jinja template
-    start_datetime = datetime.fromtimestamp(stats['start_time'])
-    duration = (datetime.fromtimestamp(round(stats['last_request_timestamp']))
-                - datetime.fromtimestamp(round(stats['start_time'])))
-    info = {
+    # compute some things here that I didn't know how to do in a jinja template
+    start_datetime = datetime.datetime.fromtimestamp(stats['start_time'])
+    end_datetime = datetime.datetime.fromtimestamp(round(stats['last_request_timestamp']))
+    duration = (end_datetime - datetime.datetime.fromtimestamp(round(stats['start_time'])))
+    timeinfo = {
         "start_datetime": start_datetime,
+        "end_datetime": end_datetime,
         "duration": duration
     }
-    return flask.render_template('report.html', stats=stats, info=info,
-            propagation_plot='/../images/timmayy.jpg')
+    return flask.render_template('report.html', stats=stats, timeinfo=timeinfo,
+            #propagation_plot='/../images/timmayy.jpg')
+            propagation_plot='../images/howarddealwithit.gif')
