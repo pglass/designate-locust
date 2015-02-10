@@ -132,5 +132,6 @@ def report(name):
         "end_datetime": end_datetime,
         "duration": duration
     }
+    propagation_plot = stats['digaas'].get('plot_file') if 'digaas' in stats else None
     return flask.render_template('report.html', stats=stats, timeinfo=timeinfo,
-            propagation_plot=stats['digaas'].get('plot_file'))
+            propagation_plot=propagation_plot)

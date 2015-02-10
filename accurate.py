@@ -11,7 +11,6 @@ from locust.clients import HttpSession
 import locust.events
 import locust.config
 
-import redis
 import gevent
 
 import client
@@ -23,7 +22,6 @@ import greenlet_manager
 from client import DesignateClient
 from web import *
 from datagen import *
-from redis_buf import RedisBuffer
 import accurate_config as CONFIG
 
 # require a username + password to access the web interface
@@ -202,11 +200,6 @@ def parse_created_at(created_at):
     We're assuming this time is UTC.
     Return a datetime instance.
     """
-    # assuming the created at time looks like:
-    # this start time is what digaas uses when computing the
-    # propagation time to the nameserver
-    #
-    # We're assuming this time is UTC.
     return datetime.datetime.strptime(created_at, '%Y-%m-%dT%H:%M:%S.%f')
 
 
@@ -219,26 +212,6 @@ class Tasks(TaskSet):
         self.designate_client = DesignateClient(self.client)
 
         self.test_data = test_data
-
-        self._use_redis = CONFIG.use_redis
-
-
-        if self._use_redis:
-            # initialize redis client
-            self.redis_client = redis.StrictRedis(
-                host=CONFIG.redis_host,
-                port=CONFIG.redis_port,
-                password=CONFIG.redis_password,
-                db=0)
-            # ping redis to ensure the connection is good (fail fast)
-            self.redis_client.ping()
-
-            self.buffer = RedisBuffer(client=self.redis_client)
-
-            # ensure cleanup when the test is stopped
-            locust.events.locust_stop_hatching += lambda: self.buffer.flush()
-            # ensure cleanup on interrupts
-            locust.events.quitting += lambda: self.buffer.flush()
 
         if CONFIG.use_digaas:
             self.digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
@@ -357,15 +330,12 @@ class Tasks(TaskSet):
                     # on the nameserver
                     self.digaas_client.post_poll_request(
                         nameserver = nameserver,
-                        zone_name = post_resp.json()['zone']['name'],
+                        query_name = post_resp.json()['zone']['name'],
                         serial = post_resp.json()['zone']['serial'],
                         start_time = to_timestamp(start_time),
                         condition = "serial_not_lower",
                         timeout = CONFIG.digaas_timeout,
                         frequency = CONFIG.digaas_interval)
-
-            if self._use_redis and post_resp.ok:
-                self.buffer.append((self.buffer.CREATE, post_resp))
 
             if not post_resp.ok:
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
@@ -422,19 +392,15 @@ class Tasks(TaskSet):
                 for nameserver in CONFIG.nameservers:
                     print "  POST digaas - %s" % nameserver
 
-                    # this will start digaas a polling until the zone disappears
-                    # from the nameserver
+                    # have digaas poll until the zone disappears from the nameserver
                     self.digaas_client.post_poll_request(
                         nameserver = nameserver,
-                        zone_name = patch_resp.json()['zone']['name'],
+                        query_name = patch_resp.json()['zone']['name'],
                         serial = patch_resp.json()['zone']['serial'],
                         start_time = to_timestamp(start_time),
                         condition = "serial_not_lower",
                         timeout = CONFIG.digaas_timeout,
                         frequency = CONFIG.digaas_interval)
-
-            if self._use_redis and resp.ok:
-                self.buffer.append((self.buffer.UPDATE, resp))
 
             if not patch_resp.ok:
                 patch_resp.failure('Failure - got %s status code' % patch_resp.status_code)
@@ -483,7 +449,7 @@ class Tasks(TaskSet):
                     # from the nameserver
                     self.digaas_client.post_poll_request(
                         nameserver = nameserver,
-                        zone_name = zone_info.name,
+                        query_name = zone_info.name,
                         serial = 0,
                         start_time = to_timestamp(start_time),
                         condition = "zone_removed",
@@ -550,12 +516,25 @@ class Tasks(TaskSet):
             data=json.dumps(payload),
             name='/v2/zones/zoneID/recordsets',
             headers=headers)
-        if self._use_redis and recordset_resp.ok:
-            zone_resp = self.designate_client.get_zone(zone_info.id,
-                                                       name='/v2/zones/zoneID',
-                                                       headers=headers)
-            if zone_resp.ok:
-                self.buffer.append((self.buffer.UPDATE, zone_resp))
+
+        if CONFIG.use_digaas and recordset_resp.ok:
+            print "Created record"
+            record_name = recordset_resp.json()["recordset"]["name"]
+            expected_data = recordset_resp.json()["recordset"]["records"][0]
+            start_time = parse_created_at(recordset_resp.json()['recordset']['created_at'])
+
+            for nameserver in CONFIG.nameservers:
+                print "Calling digaas for recordset create: %s" % nameserver
+                # digaas will polling until the zone's serial is higher
+                self.digaas_client.post_poll_request(
+                    nameserver = nameserver,
+                    query_name = record_name,
+                    serial = 0,
+                    start_time = to_timestamp(start_time),
+                    condition = "data=" + expected_data,
+                    timeout = CONFIG.digaas_timeout,
+                    frequency = CONFIG.digaas_interval)
+
 
     @task
     def modify_record(self):
@@ -567,20 +546,34 @@ class Tasks(TaskSet):
         headers = self._prepare_headers_w_tenant(record_info.tenant)
         payload = { "recordset": { "records": [ random_ip() ],
                                    "type": "A",
+                                   # TODO: is using zone_name right?
                                    "name": record_info.zone_name,
                                    "ttl": random.randint(2400, 7200) }}
-        resp = self.designate_client.put_recordset(
+        recordset_resp = self.designate_client.put_recordset(
             record_info.zone_id,
             record_info.record_id,
             data=json.dumps(payload),
             headers=headers,
-            name='/v2/zones/zoneID/recordsets/recordsetID')
-        if self._use_redis and resp.ok:
-            zone_resp = self.designate_client.get_zone(record_info.zone_id,
-                                                       name='/v2/zones/zoneID',
-                                                       headers=headers)
-            if zone_resp.ok:
-                self.buffer.append((self.buffer.UPDATE, zone_resp))
+            name="/v2/zones/zoneID/recordsets/recordsetID")
+
+        if CONFIG.use_digaas and recordset_resp.ok:
+            print "Updated record"
+            record_name = recordset_resp.json()["recordset"]["name"]
+            expected_data = recordset_resp.json()["recordset"]["records"][0]
+            start_time = parse_created_at(recordset_resp.json()["recordset"]["updated_at"])
+            print "start_time = %s" % start_time
+
+            for nameserver in CONFIG.nameservers:
+                print "Calling digaas for recordset update: %s" % nameserver
+                # digaas will polling until the zone's serial is higher
+                self.digaas_client.post_poll_request(
+                    nameserver = nameserver,
+                    query_name = record_name,
+                    serial = 0,
+                    start_time = to_timestamp(start_time),
+                    condition = "data=" + expected_data,
+                    timeout = CONFIG.digaas_timeout,
+                    frequency = CONFIG.digaas_interval)
 
     @task
     def remove_record(self):
@@ -590,17 +583,31 @@ class Tasks(TaskSet):
             print "remove_record: got None record_info"
             return
         headers = self._prepare_headers_w_tenant(record_info.tenant)
+
+        if CONFIG.use_digaas:
+            start_time = datetime.datetime.now()
         resp = self.designate_client.delete_recordset(
             record_info.zone_id,
             record_info.record_id,
             name='/v2/zones/zoneID/recordsets/recordsetID',
             headers=headers)
-        if self._use_redis and resp.ok:
-            zone_resp = self.designate_client.get_zone(record_info.zone_id,
-                                                       name='/v2/zones/zoneID',
-                                                       headers=headers)
-            if zone_resp.ok:
-                self.buffer.append((self.buffer.UPDATE, zone_resp))
+
+        if CONFIG.use_digaas and resp.ok:
+            print "Deleted record"
+            print "start_time = %s" % start_time
+
+            for nameserver in CONFIG.nameservers:
+                print "POST digaas, record delete - %s" % nameserver
+                self.digaas_client.post_poll_request(
+                    nameserver = nameserver,
+                    query_name = record_info.zone_name,
+                    serial = 0,
+                    start_time = to_timestamp(start_time),
+                    condition = "zone_removed",
+                    timeout = CONFIG.digaas_timeout,
+                    frequency = CONFIG.digaas_interval)
+
+
 
 
 class LargeTasks(Tasks):

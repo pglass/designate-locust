@@ -35,12 +35,12 @@ class DigaasClient(object):
     def __init__(self, endpoint):
         self.endpoint = endpoint.rstrip('/')
 
-    def post_poll_request(self, nameserver, zone_name, serial, start_time,
+    def post_poll_request(self, nameserver, query_name, serial, start_time,
                           condition, timeout, frequency):
-        url = self.endpoint + '/requests'
+        url = self.endpoint + '/poll_requests'
         payload = json.dumps(dict(
             nameserver = nameserver,
-            zone_name = zone_name,
+            query_name = query_name,
             serial = serial,
             start_time = start_time,
             condition = condition,
@@ -50,7 +50,7 @@ class DigaasClient(object):
         return requests.post(url, data=payload, headers=self.JSON_HEADERS)
 
     def get_poll_request(self, id):
-        url = "{0}/requests/{1}".format(self.endpoint, id)
+        url = "{0}/poll_requests/{1}".format(self.endpoint, id)
         return requests.get(url, headers=self.JSON_HEADERS)
 
     def post_stats_request(self, start_time, end_time):
