@@ -208,15 +208,12 @@ class Tasks(TaskSet):
     def __init__(self, test_data, *args, **kwargs):
         super(Tasks, self).__init__(*args, **kwargs)
 
-
         self.designate_client = DesignateClient(self.client)
 
         self.test_data = test_data
 
         if CONFIG.use_digaas:
             self.digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
-
-
 
     def pick_zone_for_get(self):
         """Returns a tuple (tenant, api_key, zone_id, zone_name)"""
@@ -257,12 +254,12 @@ class Tasks(TaskSet):
 
     @task
     def get_domain_by_id(self):
-        """GET /zones/zoneID"""
+        """GET /zones/{id}"""
         zone_info = self.pick_zone_for_get()
         # print "get_domain_by_id: %s, %s, %s" % (tenant, zone_id, zone_name)
         headers = self._prepare_headers_w_tenant(tenant_id=zone_info.tenant)
         resp = self.designate_client.get_zone(zone_info.id,
-                                              name='/v2/zones/zoneID',
+                                              name='/v2/zones/{id}',
                                               headers=headers)
 
     @task
@@ -273,7 +270,7 @@ class Tasks(TaskSet):
         headers = self._prepare_headers_w_tenant(tenant_id=zone_info.tenant)
         resp = self.designate_client.get_zone_by_name(
             zone_name=zone_info.name,
-            name='/v2/zones/zoneID?name=zoneNAME',
+            name='/v2/zones/{id}?name=zoneNAME',
             headers=headers)
 
     @task
@@ -286,12 +283,12 @@ class Tasks(TaskSet):
 
     @task
     def export_domain(self):
-        """GET /zone/zoneID, Accept: text/dns"""
+        """GET /zone/{id}, Accept: text/dns"""
         zone_info = self.pick_zone_for_get()
         # print "export_domain: %s, %s, %s" % (tenant, zone_id, zone_name)
         headers = self._prepare_headers_w_tenant(tenant_id=zone_info.tenant)
         resp = self.designate_client.export_zone(zone_info.id,
-                                                 name='/v2/zones/zoneID (export)',
+                                                 name='/v2/zones/{id} (export)',
                                                  headers=headers)
 
     @task
@@ -345,27 +342,31 @@ class Tasks(TaskSet):
                 zone_id=post_resp.json()['zone']['id'],
                 headers=headers,
                 name='/v2/zones (status of POST /v2/zones)')
-            self._poll_until_active_or_error(api_call, interval,
-                post_resp.success, post_resp.failure)
+            self._poll_until_active_or_error(
+                api_call=api_call,
+                interval=interval,
+                status_function=lambda r: r.json()['zone']['status'],
+                success_function=post_resp.success,
+                failure_function=post_resp.failure)
 
-    def _poll_until_active_or_error(self, api_call, interval, success_function,
-                                    failure_function):
+    def _poll_until_active_or_error(self, api_call, interval, status_function,
+                                    success_function, failure_function):
         # NOTE: this is assumed to be run in a separate greenlet. We use
         # `while True` here, and use gevent to manage a timeout or to kill
         # the greenlet externally.
         while True:
             resp = api_call()
-            if resp.ok and resp.json()['zone']['status'] == 'ACTIVE':
+            if resp.ok and status_function(resp) == 'ACTIVE':
                 success_function()
                 break
-            elif resp.ok and resp.json()['zone']['status'] == 'ERROR':
+            elif resp.ok and status_function(resp) == 'ERROR':
                 failure_function("Failed - saw ERROR status")
                 break
             gevent.sleep(interval)
 
     @task
     def modify_domain(self):
-        """PATCH /zones/zoneID"""
+        """PATCH /zones/{id}"""
         gevent.spawn(
             GREENLET_MANAGER.tracked_greenlet,
             lambda: self._do_modify_domain(interval=2),
@@ -380,7 +381,7 @@ class Tasks(TaskSet):
                               "ttl": random.randint(2400, 7200) }}
         with self.designate_client.patch_zone(
                 zone_info.id, data=json.dumps(payload), headers=headers,
-                name='/v2/zones/zoneID', catch_response=True) as patch_resp:
+                name='/v2/zones/{id}', catch_response=True) as patch_resp:
 
             if CONFIG.use_digaas and patch_resp.ok:
                 print "Updating zone %s" % zone_info.name
@@ -409,16 +410,17 @@ class Tasks(TaskSet):
             api_call = lambda: self.designate_client.get_zone(
                 zone_id=zone_info.id,
                 headers=headers,
-                name='/v2/zones (status of PATCH /v2/zones/zoneID)')
+                name='/v2/zones (status of PATCH /v2/zones/{id})')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
+                status_function=lambda r: r.json()['zone']['status'],
                 success_function=patch_resp.success,
                 failure_function=patch_resp.failure)
 
     @task
     def remove_domain(self):
-        """DELETE /zones/zoneID"""
+        """DELETE /zones/{id}"""
         gevent.spawn(
             GREENLET_MANAGER.tracked_greenlet,
             lambda: self._do_remove_domain(interval=2),
@@ -433,7 +435,7 @@ class Tasks(TaskSet):
 
         headers = self._prepare_headers_w_tenant(zone_info.tenant)
         with self.designate_client.delete_zone(
-                zone_info.id, headers=headers, name='/v2/zones/zoneID',
+                zone_info.id, headers=headers, name='/v2/zones/{id}',
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
@@ -458,7 +460,7 @@ class Tasks(TaskSet):
 
             api_call = lambda: self.designate_client.get_zone(
                 zone_info.id, headers=headers, catch_response=True,
-                name='/v2/zones (status of DELETE /v2/zones/zoneID)')
+                name='/v2/zones (status of DELETE /v2/zones/{id})')
             self._poll_until_404(api_call, interval,
                 success_function=del_resp.success,
                 failure_function=del_resp.failure)
@@ -480,28 +482,35 @@ class Tasks(TaskSet):
 
     @task
     def list_records(self):
-        """GET /zones/zoneID/recordsets"""
+        """GET /zones/{id}/recordsets"""
         tenant, api_key, zone_id, zone_name = self.pick_zone_for_get()
         headers=self._prepare_headers_w_tenant(tenant)
         resp = self.designate_client.list_recordsets(
-            zone_id, name='/v2/zones/zoneID/recordsets', headers=headers,
+            zone_id, name='/v2/zones/{id}/recordsets', headers=headers,
             # at the time of this writing, designate didn't limit by default
             params={'limit': 100})
 
     @task
     def get_record(self):
-        """GET /zones/zoneID/recordsets/recordID"""
+        """GET /zones/{id}/recordsets/recordID"""
         record_info = self.pick_record_for_get()
         headers = self._prepare_headers_w_tenant(record_info.tenant)
         self.designate_client.get_recordset(
             record_info.zone_id,
             record_info.record_id,
             headers=headers,
-            name='/v2/zone/zoneID/recordsets/recordID')
+            name='/v2/zone/{id}/recordsets/recordID')
 
     @task
     def create_record(self):
-        """POST /zones/zoneID/recordsets"""
+        """POST /zones/{id}/recordsets"""
+        gevent.spawn(
+            GREENLET_MANAGER.tracked_greenlet,
+            lambda: self._do_create_record(interval=2),
+            timeout=60
+        )
+
+    def _do_create_record(self, interval):
         zone_info = self.pick_zone_for_get()
         headers = self._prepare_headers_w_tenant(zone_info.tenant)
 
@@ -511,34 +520,60 @@ class Tasks(TaskSet):
                                   "ttl" : 3600,
                                   "records" : [ random_ip() ] }}
 
-        recordset_resp = self.designate_client.post_recordset(
-            zone_info.id,
-            data=json.dumps(payload),
-            name='/v2/zones/zoneID/recordsets',
-            headers=headers)
+        with self.designate_client.post_recordset(
+                zone_info.id,
+                data=json.dumps(payload),
+                name='/v2/zones/{id}/recordsets',
+                headers=headers,
+                catch_response=True) as post_resp:
+            print "RECORD CREATE"
+            print post_resp.text
 
-        if CONFIG.use_digaas and recordset_resp.ok:
-            print "Created record"
-            record_name = recordset_resp.json()["recordset"]["name"]
-            expected_data = recordset_resp.json()["recordset"]["records"][0]
-            start_time = parse_created_at(recordset_resp.json()['recordset']['created_at'])
 
-            for nameserver in CONFIG.nameservers:
-                print "Calling digaas for recordset create: %s" % nameserver
-                # digaas will polling until the zone's serial is higher
-                self.digaas_client.post_poll_request(
-                    nameserver = nameserver,
-                    query_name = record_name,
-                    serial = 0,
-                    start_time = to_timestamp(start_time),
-                    condition = "data=" + expected_data,
-                    timeout = CONFIG.digaas_timeout,
-                    frequency = CONFIG.digaas_interval)
+            if CONFIG.use_digaas and post_resp.ok:
+                print "Created record"
+                record_name = post_resp.json()["recordset"]["name"]
+                expected_data = post_resp.json()["recordset"]["records"][0]
+                start_time = parse_created_at(post_resp.json()['recordset']['created_at'])
 
+                for nameserver in CONFIG.nameservers:
+                    print "Calling digaas for recordset create: %s" % nameserver
+                    # digaas will polling until the zone's serial is higher
+                    self.digaas_client.post_poll_request(
+                        nameserver = nameserver,
+                        query_name = record_name,
+                        serial = 0,
+                        start_time = to_timestamp(start_time),
+                        condition = "data=" + expected_data,
+                        timeout = CONFIG.digaas_timeout,
+                        frequency = CONFIG.digaas_interval)
+
+            if not post_resp.ok:
+                post_resp.failure("Failed with status code %s" % post_resp.status_code)
+                return
+
+            api_call = lambda: self.designate_client.get_recordset(
+                zone_id=zone_info.id,
+                recordset_id=post_resp.json()['recordset']['id'],
+                headers=headers,
+                name='/v2/zones/{id}/recordsets/{id} (POST status check)')
+            self._poll_until_active_or_error(
+                api_call=api_call,
+                interval=interval,
+                status_function=lambda r: r.json()['recordset']['status'],
+                success_function=post_resp.success,
+                failure_function=post_resp.failure)
 
     @task
     def modify_record(self):
-        """PATCH /zones/zoneID/recordsets/recordsetID"""
+        gevent.spawn(
+            GREENLET_MANAGER.tracked_greenlet,
+            lambda: self._do_modify_record(interval=2),
+            timeout=60
+        )
+
+    def _do_modify_record(self, interval):
+        """PATCH /zones/{id}/recordsets/{id}"""
         record_info = self.pick_record_for_update()
         if not record_info:
             print "modify_record: got None record_info"
@@ -549,65 +584,110 @@ class Tasks(TaskSet):
                                    # TODO: is using zone_name right?
                                    "name": record_info.zone_name,
                                    "ttl": random.randint(2400, 7200) }}
-        recordset_resp = self.designate_client.put_recordset(
-            record_info.zone_id,
-            record_info.record_id,
-            data=json.dumps(payload),
-            headers=headers,
-            name="/v2/zones/zoneID/recordsets/recordsetID")
+        with self.designate_client.put_recordset(
+                record_info.zone_id,
+                record_info.record_id,
+                data=json.dumps(payload),
+                headers=headers,
+                name="/v2/zones/{id}/recordsets/{id}",
+                catch_response=True) as put_resp:
 
-        if CONFIG.use_digaas and recordset_resp.ok:
-            print "Updated record"
-            record_name = recordset_resp.json()["recordset"]["name"]
-            expected_data = recordset_resp.json()["recordset"]["records"][0]
-            start_time = parse_created_at(recordset_resp.json()["recordset"]["updated_at"])
-            print "start_time = %s" % start_time
+            if CONFIG.use_digaas and put_resp.ok:
+                print "Updated record"
+                record_name = put_resp.json()["recordset"]["name"]
+                expected_data = put_resp.json()["recordset"]["records"][0]
+                start_time = parse_created_at(put_resp.json()["recordset"]["updated_at"])
+                print "start_time = %s" % start_time
 
-            for nameserver in CONFIG.nameservers:
-                print "Calling digaas for recordset update: %s" % nameserver
-                # digaas will polling until the zone's serial is higher
-                self.digaas_client.post_poll_request(
-                    nameserver = nameserver,
-                    query_name = record_name,
-                    serial = 0,
-                    start_time = to_timestamp(start_time),
-                    condition = "data=" + expected_data,
-                    timeout = CONFIG.digaas_timeout,
-                    frequency = CONFIG.digaas_interval)
+                for nameserver in CONFIG.nameservers:
+                    print "Calling digaas for recordset update: %s" % nameserver
+                    # digaas will polling until the zone's serial is higher
+                    self.digaas_client.post_poll_request(
+                        nameserver = nameserver,
+                        query_name = record_name,
+                        serial = 0,
+                        start_time = to_timestamp(start_time),
+                        condition = "data=" + expected_data,
+                        timeout = CONFIG.digaas_timeout,
+                        frequency = CONFIG.digaas_interval)
+
+            if not put_resp.ok:
+                put_resp.failure("Failed with status code %s" % put_resp.status_code)
+                return
+
+            api_call = lambda: self.designate_client.get_recordset(
+                zone_id=put_resp.json()['recordset']['zone_id'],
+                recordset_id=put_resp.json()['recordset']['id'],
+                headers=headers,
+                name='/v2/zones/{id}/recordsets/{id} (PUT status check)')
+            self._poll_until_active_or_error(
+                api_call=api_call,
+                interval=interval,
+                status_function=lambda r: r.json()['recordset']['status'],
+                success_function=put_resp.success,
+                failure_function=put_resp.failure)
 
     @task
     def remove_record(self):
-        """DELETE /zones/zoneID/recordsets/recordsetID"""
+        """DELETE /zones/{id}/recordsets/{id}"""
+        gevent.spawn(
+            GREENLET_MANAGER.tracked_greenlet,
+            lambda: self._do_remove_record(interval=2),
+            timeout=60
+        )
+
+    def _do_remove_record(self, interval):
         record_info = self.pick_record_for_delete()
         if not record_info:
             print "remove_record: got None record_info"
             return
         headers = self._prepare_headers_w_tenant(record_info.tenant)
 
+        # recordset deletes do not return "deleted_at" times.
+        # take a timestamp instead.
+        #
+        # IMPORTANT: your locust box must be synchronized to network time,
+        # along with your digaas box, or digaas will compute bad durations
         if CONFIG.use_digaas:
             start_time = datetime.datetime.now()
-        resp = self.designate_client.delete_recordset(
-            record_info.zone_id,
-            record_info.record_id,
-            name='/v2/zones/zoneID/recordsets/recordsetID',
-            headers=headers)
 
-        if CONFIG.use_digaas and resp.ok:
-            print "Deleted record"
-            print "start_time = %s" % start_time
+        with self.designate_client.delete_recordset(
+                record_info.zone_id,
+                record_info.record_id,
+                name='/v2/zones/{id}/recordsets/{id}',
+                headers=headers,
+                catch_response=True) as del_resp:
 
-            for nameserver in CONFIG.nameservers:
-                print "POST digaas, record delete - %s" % nameserver
-                self.digaas_client.post_poll_request(
-                    nameserver = nameserver,
-                    query_name = record_info.zone_name,
-                    serial = 0,
-                    start_time = to_timestamp(start_time),
-                    condition = "zone_removed",
-                    timeout = CONFIG.digaas_timeout,
-                    frequency = CONFIG.digaas_interval)
+            if CONFIG.use_digaas and del_resp.ok:
+                print "Deleted record"
+                print "start_time = %s" % start_time
 
+                for nameserver in CONFIG.nameservers:
+                    print "POST digaas, record delete - %s" % nameserver
+                    self.digaas_client.post_poll_request(
+                        nameserver = nameserver,
+                        query_name = record_info.zone_name,
+                        serial = 0,
+                        start_time = to_timestamp(start_time),
+                        condition = "zone_removed",
+                        timeout = CONFIG.digaas_timeout,
+                        frequency = CONFIG.digaas_interval)
 
+            if not del_resp.ok:
+                del_resp.failure("Failed with status_code %s" % del_resp.status_code)
+                return
+
+            api_call = lambda: self.designate_client.get_recordset(
+                record_info.zone_id,
+                record_info.record_id,
+                headers=headers,
+                name='/v2/zones/{id}/recordsets/{id} (DELETE status check)',
+                catch_response=True)
+            self._poll_until_404(
+                api_call=api_call,
+                interval=interval,
+                success_function=del_resp.success,
+                failure_function=del_resp.failure)
 
 
 class LargeTasks(Tasks):
