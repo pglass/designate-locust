@@ -11,10 +11,11 @@ There are two things here:
     into the persistent report.
 """
 
+import datetime
 import locust
-import requests
 import json
 import os
+import requests
 import shutil
 import time
 import uuid
@@ -36,9 +37,9 @@ class DigaasClient(object):
         self.endpoint = endpoint.rstrip('/')
 
     def post_poll_request(self, nameserver, query_name, serial, start_time,
-                          condition, timeout, frequency):
+                          condition, timeout, frequency, rdatatype=None):
         url = self.endpoint + '/poll_requests'
-        payload = json.dumps(dict(
+        payload = dict(
             nameserver = nameserver,
             query_name = query_name,
             serial = serial,
@@ -46,8 +47,10 @@ class DigaasClient(object):
             condition = condition,
             timeout = timeout,
             frequency = frequency,
-        ))
-        return requests.post(url, data=payload, headers=self.JSON_HEADERS)
+        )
+        if rdatatype is not None:
+            payload['rdatatype'] = rdatatype
+        return requests.post(url, data=json.dumps(payload), headers=self.JSON_HEADERS)
 
     def get_poll_request(self, id):
         url = "{0}/poll_requests/{1}".format(self.endpoint, id)
@@ -71,6 +74,92 @@ class DigaasClient(object):
         resp = requests.get(url, stream=True)
         resp.raw.decode_content = True
         return resp
+
+
+EPOCH_START = datetime.datetime(1970, 1, 1)
+class DigaasBehaviors(object):
+    """A place to put code to declutter our Tasks class"""
+
+    def __init__(self, client, config):
+        """
+        :param client: an instance of DigaasClient
+        :param config: e.g. your accurate_config.py module
+        """
+        self.client = client
+        self.config = config
+
+    def to_timestamp(self, dt):
+        """dt is a datetime object which must be in UTC"""
+        return (dt - EPOCH_START).total_seconds()
+
+    def parse_created_at(self, created_at):
+        """Parse the given time, which is in iso format with 'T' and milliseconds:
+            2015-02-02T20:07:53.000000
+        We're assuming this time is UTC.
+        Return a datetime instance.
+        """
+        return datetime.datetime.strptime(created_at, '%Y-%m-%dT%H:%M:%S.%f')
+
+    def _debug_resp(self, resp):
+        if not resp.ok:
+            print "Digaas request failed:"
+            print resp.request.body
+            print resp.text
+
+    def check_zone_create_or_update(self, resp):
+        """Tell digaas to poll the nameservers to for a zone serial change
+
+        :param resp: A successful POST /v2/zones or PATCH /v2/zones response
+        """
+        # digaas uses the start_time when computing the propagation
+        # time to the nameserver. We're assuming this time is UTC.
+        start_time = self.parse_created_at(resp.json()['zone']['created_at'])
+
+        for nameserver in self.config.nameservers:
+            # print "  POST digaas (create/update zone) - %s" % nameserver
+            r = self.client.post_poll_request(
+                nameserver = nameserver,
+                query_name = resp.json()['zone']['name'],
+                serial = resp.json()['zone']['serial'],
+                start_time = self.to_timestamp(start_time),
+                condition = "serial_not_lower",
+                timeout = self.config.digaas_timeout,
+                frequency = self.config.digaas_interval)
+            self._debug_resp(r)
+
+    def check_name_removed(self, query_name, start_time):
+        """Tell digaas to poll the nameservers until the name is removed"""
+        for nameserver in self.config.nameservers:
+            # print "  POST digaas (delete zone/record) - %s" % nameserver
+            r = self.client.post_poll_request(
+                nameserver = nameserver,
+                query_name = query_name,
+                serial = 0,
+                start_time = self.to_timestamp(start_time),
+                condition = "zone_removed",
+                timeout = self.config.digaas_timeout,
+                frequency = self.config.digaas_interval)
+            self._debug_resp(r)
+
+    def check_record_create_or_update(self, resp):
+        record_name = resp.json()["recordset"]["name"]
+        expected_data = resp.json()["recordset"]["records"][0]
+        record_type = resp.json()["recordset"]["type"]
+        start_time = self.parse_created_at(resp.json()['recordset']['created_at'])
+
+        for nameserver in self.config.nameservers:
+            # print "  POST digaas (create/update recordset) - %s" % nameserver
+            # digaas will poll until the zone's serial is higher
+            r = self.client.post_poll_request(
+                nameserver = nameserver,
+                query_name = record_name,
+                rdatatype = record_type,
+                serial = 0,
+                start_time = self.to_timestamp(start_time),
+                condition = "data=" + expected_data,
+                timeout = self.config.digaas_timeout,
+                frequency = self.config.digaas_interval)
+            self._debug_resp(r)
 
 
 def fetch_plot(client, start_time, end_time, output_filename):

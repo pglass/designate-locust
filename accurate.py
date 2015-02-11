@@ -223,20 +223,6 @@ if not insight.is_master():
         lambda: GREENLET_MANAGER.cleanup_greenlets()
 
 
-EPOCH_START = datetime.datetime(1970, 1, 1)
-def to_timestamp(dt):
-    """dt is a datetime object which must be in UTC"""
-    return (dt - EPOCH_START).total_seconds()
-
-def parse_created_at(created_at):
-    """Parse the given time, which is in iso format with 'T' and milliseconds:
-        2015-02-02T20:07:53.000000
-    We're assuming this time is UTC.
-    Return a datetime instance.
-    """
-    return datetime.datetime.strptime(created_at, '%Y-%m-%dT%H:%M:%S.%f')
-
-
 class Tasks(TaskSet):
 
     def __init__(self, test_data, *args, **kwargs):
@@ -248,6 +234,7 @@ class Tasks(TaskSet):
 
         if CONFIG.use_digaas:
             self.digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
+            self.digaas_behaviors = digaas_integration.DigaasBehaviors(self.digaas_client, CONFIG)
 
     def prepare_headers_with_tenant(self, tenant_id=None):
         return { client.ROLE_HEADER: 'admin',
@@ -316,24 +303,7 @@ class Tasks(TaskSet):
                                              catch_response=True) as post_resp:
 
             if CONFIG.use_digaas and post_resp.ok:
-                print "Created domain:"
-                # digaas uses the start_time when computing the propagation
-                # time to the nameserver. We're assuming this time is UTC.
-                start_time = parse_created_at(post_resp.json()['zone']['created_at'])
-                print "  start_time = %s" % start_time
-
-                for nameserver in CONFIG.nameservers:
-                    print "  POST digaas - %s" % nameserver
-                    # this will start digaas a polling until the zone shows up
-                    # on the nameserver
-                    self.digaas_client.post_poll_request(
-                        nameserver = nameserver,
-                        query_name = post_resp.json()['zone']['name'],
-                        serial = post_resp.json()['zone']['serial'],
-                        start_time = to_timestamp(start_time),
-                        condition = "serial_not_lower",
-                        timeout = CONFIG.digaas_timeout,
-                        frequency = CONFIG.digaas_interval)
+                self.digaas_behaviors.check_zone_create_or_update(post_resp)
 
             if not post_resp.ok:
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
@@ -385,24 +355,7 @@ class Tasks(TaskSet):
                 name='/v2/zones/{id}', catch_response=True) as patch_resp:
 
             if CONFIG.use_digaas and patch_resp.ok:
-                print "Updating zone %s" % zone_info.name
-                # digaas uses the start_time when computing the propagation
-                # time to the nameserver. We're assuming this time is UTC.
-                start_time = parse_created_at(patch_resp.json()['zone']['updated_at'])
-                print "  start_time = %s" % start_time
-
-                for nameserver in CONFIG.nameservers:
-                    print "  POST digaas - %s" % nameserver
-
-                    # have digaas poll until the zone disappears from the nameserver
-                    self.digaas_client.post_poll_request(
-                        nameserver = nameserver,
-                        query_name = patch_resp.json()['zone']['name'],
-                        serial = patch_resp.json()['zone']['serial'],
-                        start_time = to_timestamp(start_time),
-                        condition = "serial_not_lower",
-                        timeout = CONFIG.digaas_timeout,
-                        frequency = CONFIG.digaas_interval)
+                self.digaas_behaviors.check_zone_create_or_update(patch_resp)
 
             if not patch_resp.ok:
                 patch_resp.failure('Failure - got %s status code' % patch_resp.status_code)
@@ -435,29 +388,23 @@ class Tasks(TaskSet):
             return
 
         headers = self.prepare_headers_with_tenant(zone_info.tenant)
+
+        # digaas uses the start_time when computing the propagation
+        # time to the nameserver. We're assuming this time is UTC.
+        # Normally, we use the created_at/update_at time returned by the api,
+        # but the api doesn't gives us that for a delete
+        #
+        # IMPORTANT: your locust box must be synchronized to network time,
+        # along with your digaas box, or digaas will compute bad durations
+        if CONFIG.use_digaas:
+            start_time = datetime.datetime.now()
+
         with self.designate_client.delete_zone(
                 zone_info.id, headers=headers, name='/v2/zones/{id}',
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
-                # digaas uses the start_time when computing the propagation
-                # time to the nameserver. We're assuming this time is UTC.
-                #
-                # designate gives us no response for a delete which means we
-                # get no deleted_at time or serial
-                start_time = datetime.datetime.now()
-
-                for nameserver in CONFIG.nameservers:
-                    # this will start digaas a polling until the zone disappears
-                    # from the nameserver
-                    self.digaas_client.post_poll_request(
-                        nameserver = nameserver,
-                        query_name = zone_info.name,
-                        serial = 0,
-                        start_time = to_timestamp(start_time),
-                        condition = "zone_removed",
-                        timeout = CONFIG.digaas_timeout,
-                        frequency = CONFIG.digaas_interval)
+                self.digaas_behaviors.check_name_removed(zone_info.name, start_time)
 
             api_call = lambda: self.designate_client.get_zone(
                 zone_info.id, headers=headers, catch_response=True,
@@ -527,27 +474,9 @@ class Tasks(TaskSet):
                 name='/v2/zones/{id}/recordsets',
                 headers=headers,
                 catch_response=True) as post_resp:
-            print "RECORD CREATE"
-            print post_resp.text
-
 
             if CONFIG.use_digaas and post_resp.ok:
-                print "Created record"
-                record_name = post_resp.json()["recordset"]["name"]
-                expected_data = post_resp.json()["recordset"]["records"][0]
-                start_time = parse_created_at(post_resp.json()['recordset']['created_at'])
-
-                for nameserver in CONFIG.nameservers:
-                    print "Calling digaas for recordset create: %s" % nameserver
-                    # digaas will polling until the zone's serial is higher
-                    self.digaas_client.post_poll_request(
-                        nameserver = nameserver,
-                        query_name = record_name,
-                        serial = 0,
-                        start_time = to_timestamp(start_time),
-                        condition = "data=" + expected_data,
-                        timeout = CONFIG.digaas_timeout,
-                        frequency = CONFIG.digaas_interval)
+                self.digaas_behaviors.check_record_create_or_update(post_resp)
 
             if not post_resp.ok:
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
@@ -594,23 +523,7 @@ class Tasks(TaskSet):
                 catch_response=True) as put_resp:
 
             if CONFIG.use_digaas and put_resp.ok:
-                print "Updated record"
-                record_name = put_resp.json()["recordset"]["name"]
-                expected_data = put_resp.json()["recordset"]["records"][0]
-                start_time = parse_created_at(put_resp.json()["recordset"]["updated_at"])
-                print "start_time = %s" % start_time
-
-                for nameserver in CONFIG.nameservers:
-                    print "Calling digaas for recordset update: %s" % nameserver
-                    # digaas will polling until the zone's serial is higher
-                    self.digaas_client.post_poll_request(
-                        nameserver = nameserver,
-                        query_name = record_name,
-                        serial = 0,
-                        start_time = to_timestamp(start_time),
-                        condition = "data=" + expected_data,
-                        timeout = CONFIG.digaas_timeout,
-                        frequency = CONFIG.digaas_interval)
+                self.digaas_behaviors.check_record_create_or_update(put_resp)
 
             if not put_resp.ok:
                 put_resp.failure("Failed with status code %s" % put_resp.status_code)
@@ -644,7 +557,10 @@ class Tasks(TaskSet):
             return
         headers = self.prepare_headers_with_tenant(record_info.tenant)
 
-        # since record deletes don't give a "deleted_at" time, take a timestamp
+        # digaas uses the start_time when computing the propagation
+        # time to the nameserver. We're assuming this time is UTC.
+        # Normally, we use the created_at/update_at time returned by the api,
+        # but the api doesn't gives us that for a delete
         #
         # IMPORTANT: your locust box must be synchronized to network time,
         # along with your digaas box, or digaas will compute bad durations
@@ -659,19 +575,7 @@ class Tasks(TaskSet):
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
-                print "Deleted record"
-                print "start_time = %s" % start_time
-
-                for nameserver in CONFIG.nameservers:
-                    print "POST digaas, record delete - %s" % nameserver
-                    self.digaas_client.post_poll_request(
-                        nameserver = nameserver,
-                        query_name = record_info.zone_name,
-                        serial = 0,
-                        start_time = to_timestamp(start_time),
-                        condition = "zone_removed",
-                        timeout = CONFIG.digaas_timeout,
-                        frequency = CONFIG.digaas_interval)
+                self.digaas_behaviors.check_name_removed(record_info.zone_name, start_time)
 
             if not del_resp.ok:
                 del_resp.failure("Failed with status_code %s" % del_resp.status_code)
