@@ -51,7 +51,7 @@ if CONFIG.use_digaas and not insight.is_slave():
     digaas_integration.setup_digaas_integration(_digaas_client)
 
 
-def _prepare_headers_w_tenant(tenant):
+def prepare_headers_with_tenant(tenant):
     return { client.ROLE_HEADER: 'admin',
              client.PROJECT_ID_HEADER: tenant }
 
@@ -61,7 +61,7 @@ def get_domains_data(tenants, n):
     for tenant in tenants:
         # print "Using tenant: %s" % tenant
         resp = _designate_client.list_zones(
-            headers=_prepare_headers_w_tenant(tenant),
+            headers=prepare_headers_with_tenant(tenant),
             params={"limit": n},
             name='-- prep data')
         if not resp.ok:
@@ -80,7 +80,7 @@ def get_records_data(zone_infos, n, rtype):
     for zone_info in zone_infos:
         resp = _designate_client.list_recordsets(
             zone_info.id,
-            headers=_prepare_headers_w_tenant(zone_info.tenant),
+            headers=prepare_headers_with_tenant(zone_info.tenant),
             params={"limit": n, "type": rtype},
             name='-- prep data')
         if not resp.ok:
@@ -95,7 +95,7 @@ def get_records_data(zone_infos, n, rtype):
             #print "%s creating A record %s --> %s" % (zone_info.tenant, zone_info.name, ip)
             resp = _designate_client.post_recordset(
                 zone_info.id, data=json.dumps(payload),
-                headers=_prepare_headers_w_tenant(zone_info.tenant),
+                headers=prepare_headers_with_tenant(zone_info.tenant),
                 name='-- prep data')
             recordset = resp.json()['recordset']
             record = recordset['records'][0]  # !
@@ -139,6 +139,7 @@ class TestData(object):
         self.tenant_list = list(tenant_list)
 
     def refresh(self, n_domains_per_tenant, n_records_per_domain):
+        """Discard currently stored data and fetch new data from Designate."""
         domain_data = get_domains_data(self.tenant_list, n_domains_per_tenant)
 
         self.domain_get_data,    \
@@ -159,6 +160,39 @@ class TestData(object):
                 % (len(self.domain_get_data), len(self.domain_delete_data),
                    len(self.record_get_data), len(self.record_delete_data),
                    len(self.record_update_data)))
+
+    def pick_zone_for_get(self):
+        """Returns a tuple (tenant, api_key, zone_id, zone_name)"""
+        return select_random_item(self.domain_get_data)
+
+    def pick_zone_for_delete(self):
+        """Returns a tuple (tenant, api_key, zone_id, zone_name)"""
+        val = select_random_item(self.domain_delete_data)
+        # ensure we don't pick this twice
+        if val:
+            self.domain_delete_data.remove(val)
+        #print "deleted record - %s" % self.test_data
+        return val
+
+    def pick_record_for_get(self):
+        """Returns a tuple (tenant, api_key, zone_id, zone_name, record_id,
+        record_data, record_type)"""
+        return select_random_item(self.record_get_data)
+
+    def pick_record_for_update(self):
+        return select_random_item(self.record_update_data)
+
+    def pick_record_for_delete(self):
+        """Returns a tuple (tenant, api_key, zone_id, zone_name, record_id,
+        record_data, record_type)"""
+        val = select_random_item(self.record_delete_data)
+        if val:
+            self.record_delete_data.remove(val)
+        #print "deleted record - %s" % self.test_data
+        return val
+
+    def pick_random_tenant(self):
+        return select_random_item(self.tenant_list)
 
 
 def refresh_test_data(previous, current):
@@ -215,49 +249,16 @@ class Tasks(TaskSet):
         if CONFIG.use_digaas:
             self.digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
 
-    def pick_zone_for_get(self):
-        """Returns a tuple (tenant, api_key, zone_id, zone_name)"""
-        return select_random_item(self.test_data.domain_get_data)
-
-    def pick_zone_for_delete(self):
-        """Returns a tuple (tenant, api_key, zone_id, zone_name)"""
-        val = select_random_item(self.test_data.domain_delete_data)
-        # ensure we don't pick this twice
-        if val:
-            self.test_data.domain_delete_data.remove(val)
-        #print "deleted record - %s" % self.test_data
-        return val
-
-    def pick_record_for_get(self):
-        """Returns a tuple (tenant, api_key, zone_id, zone_name, record_id,
-        record_data, record_type)"""
-        return select_random_item(self.test_data.record_get_data)
-
-    def pick_record_for_update(self):
-        return select_random_item(self.test_data.record_update_data)
-
-    def pick_record_for_delete(self):
-        """Returns a tuple (tenant, api_key, zone_id, zone_name, record_id,
-        record_data, record_type)"""
-        val = select_random_item(self.test_data.record_delete_data)
-        if val:
-            self.test_data.record_delete_data.remove(val)
-        #print "deleted record - %s" % self.test_data
-        return val
-
-    def _random_tenant(self):
-        return select_random_item(self.test_data.tenant_list)
-
-    def _prepare_headers_w_tenant(self, tenant_id=None):
+    def prepare_headers_with_tenant(self, tenant_id=None):
         return { client.ROLE_HEADER: 'admin',
-                 client.PROJECT_ID_HEADER: tenant_id or self._random_tenant() }
+                 client.PROJECT_ID_HEADER: tenant_id or self.test_data.pick_random_tenant() }
 
     @task
     def get_domain_by_id(self):
         """GET /zones/{id}"""
-        zone_info = self.pick_zone_for_get()
+        zone_info = self.test_data.pick_zone_for_get()
         # print "get_domain_by_id: %s, %s, %s" % (tenant, zone_id, zone_name)
-        headers = self._prepare_headers_w_tenant(tenant_id=zone_info.tenant)
+        headers = self.prepare_headers_with_tenant(tenant_id=zone_info.tenant)
         resp = self.designate_client.get_zone(zone_info.id,
                                               name='/v2/zones/{id}',
                                               headers=headers)
@@ -265,9 +266,9 @@ class Tasks(TaskSet):
     @task
     def get_domain_by_name(self):
         """GET /zones?name=<name>"""
-        zone_info = self.pick_zone_for_get()
+        zone_info = self.test_data.pick_zone_for_get()
         # print "get_domain_by_name: %s, %s, %s" % (tenant, zone_id, zone_name)
-        headers = self._prepare_headers_w_tenant(tenant_id=zone_info.tenant)
+        headers = self.prepare_headers_with_tenant(tenant_id=zone_info.tenant)
         resp = self.designate_client.get_zone_by_name(
             zone_name=zone_info.name,
             name='/v2/zones/{id}?name=zoneNAME',
@@ -276,7 +277,7 @@ class Tasks(TaskSet):
     @task
     def list_domains(self):
         """GET /zones"""
-        headers = self._prepare_headers_w_tenant()
+        headers = self.prepare_headers_with_tenant()
         self.designate_client.list_zones(name='/v2/zones', headers=headers,
             # at the time of this writing, designate didn't limit by default
             params={'limit': 100})
@@ -284,9 +285,9 @@ class Tasks(TaskSet):
     @task
     def export_domain(self):
         """GET /zone/{id}, Accept: text/dns"""
-        zone_info = self.pick_zone_for_get()
+        zone_info = self.test_data.pick_zone_for_get()
         # print "export_domain: %s, %s, %s" % (tenant, zone_id, zone_name)
-        headers = self._prepare_headers_w_tenant(tenant_id=zone_info.tenant)
+        headers = self.prepare_headers_with_tenant(tenant_id=zone_info.tenant)
         resp = self.designate_client.export_zone(zone_info.id,
                                                  name='/v2/zones/{id} (export)',
                                                  headers=headers)
@@ -302,7 +303,7 @@ class Tasks(TaskSet):
 
     def _do_create_domain(self, interval):
         zone, email = random_zone_email()
-        headers = self._prepare_headers_w_tenant()
+        headers = self.prepare_headers_with_tenant()
         payload = {"zone": { "name": zone,
                              "email": email,
                              "ttl": 7200 }}
@@ -374,8 +375,8 @@ class Tasks(TaskSet):
         )
 
     def _do_modify_domain(self, interval):
-        zone_info = self.pick_zone_for_get()
-        headers = self._prepare_headers_w_tenant(zone_info.tenant)
+        zone_info = self.test_data.pick_zone_for_get()
+        headers = self.prepare_headers_with_tenant(zone_info.tenant)
         payload = { "zone": { "name": zone_info.name,
                               "email": ("update@" + zone_info.name).strip('.'),
                               "ttl": random.randint(2400, 7200) }}
@@ -428,12 +429,12 @@ class Tasks(TaskSet):
         )
 
     def _do_remove_domain(self, interval):
-        zone_info = self.pick_zone_for_delete()
+        zone_info = self.test_data.pick_zone_for_delete()
         if zone_info is None:
             print "remove_domain: got None zone_info"
             return
 
-        headers = self._prepare_headers_w_tenant(zone_info.tenant)
+        headers = self.prepare_headers_with_tenant(zone_info.tenant)
         with self.designate_client.delete_zone(
                 zone_info.id, headers=headers, name='/v2/zones/{id}',
                 catch_response=True) as del_resp:
@@ -483,8 +484,8 @@ class Tasks(TaskSet):
     @task
     def list_records(self):
         """GET /zones/{id}/recordsets"""
-        tenant, api_key, zone_id, zone_name = self.pick_zone_for_get()
-        headers=self._prepare_headers_w_tenant(tenant)
+        tenant, api_key, zone_id, zone_name = self.test_data.pick_zone_for_get()
+        headers=self.prepare_headers_with_tenant(tenant)
         resp = self.designate_client.list_recordsets(
             zone_id, name='/v2/zones/{id}/recordsets', headers=headers,
             # at the time of this writing, designate didn't limit by default
@@ -493,8 +494,8 @@ class Tasks(TaskSet):
     @task
     def get_record(self):
         """GET /zones/{id}/recordsets/recordID"""
-        record_info = self.pick_record_for_get()
-        headers = self._prepare_headers_w_tenant(record_info.tenant)
+        record_info = self.test_data.pick_record_for_get()
+        headers = self.prepare_headers_with_tenant(record_info.tenant)
         self.designate_client.get_recordset(
             record_info.zone_id,
             record_info.record_id,
@@ -511,8 +512,8 @@ class Tasks(TaskSet):
         )
 
     def _do_create_record(self, interval):
-        zone_info = self.pick_zone_for_get()
-        headers = self._prepare_headers_w_tenant(zone_info.tenant)
+        zone_info = self.test_data.pick_zone_for_get()
+        headers = self.prepare_headers_with_tenant(zone_info.tenant)
 
         a_record_name = "{0}.{1}".format(randomize("record"), zone_info.name)
         payload = {"recordset" : {"name" : a_record_name,
@@ -574,11 +575,11 @@ class Tasks(TaskSet):
 
     def _do_modify_record(self, interval):
         """PATCH /zones/{id}/recordsets/{id}"""
-        record_info = self.pick_record_for_update()
+        record_info = self.test_data.pick_record_for_update()
         if not record_info:
             print "modify_record: got None record_info"
             return
-        headers = self._prepare_headers_w_tenant(record_info.tenant)
+        headers = self.prepare_headers_with_tenant(record_info.tenant)
         payload = { "recordset": { "records": [ random_ip() ],
                                    "type": "A",
                                    # TODO: is using zone_name right?
@@ -637,14 +638,13 @@ class Tasks(TaskSet):
         )
 
     def _do_remove_record(self, interval):
-        record_info = self.pick_record_for_delete()
+        record_info = self.test_data.pick_record_for_delete()
         if not record_info:
             print "remove_record: got None record_info"
             return
-        headers = self._prepare_headers_w_tenant(record_info.tenant)
+        headers = self.prepare_headers_with_tenant(record_info.tenant)
 
-        # recordset deletes do not return "deleted_at" times.
-        # take a timestamp instead.
+        # since record deletes don't give a "deleted_at" time, take a timestamp
         #
         # IMPORTANT: your locust box must be synchronized to network time,
         # along with your digaas box, or digaas will compute bad durations
