@@ -95,16 +95,16 @@ def create_domains(n_per_tenant, prefix='domain'):
     for tenant in TENANTS:
         for _ in xrange(n_per_tenant):
             zone, email = random_zone_email(name=prefix)
-            payload = {"zone": { "name": zone,
-                                 "email": email,
-                                 "ttl": 7200 }}
+            payload = { "name": zone,
+                        "email": email,
+                        "ttl": 7200 }
             print "{0} creating {1}".format(tenant, zone)
             resp = CLIENT.post_zone(data=json.dumps(payload),
                                     headers=prepare_headers(tenant))
             if not resp.ok or not resp.json():
                 error(resp.text)
             else:
-                val = (tenant, get_api_key(tenant), resp.json()['zone']['id'], zone)
+                val = (tenant, get_api_key(tenant), resp.json()['id'], zone)
                 result.append(val)
     return result
 
@@ -138,10 +138,10 @@ def create_A_records(domains):
     for domain in domains:
         tenant, api_key, zone_id, zone_name = domain
         ip = random_ip()
-        payload = {"recordset" : {"name" : zone_name,
-                                  "type" : "A",
-                                  "ttl" : 3600,
-                                  "records" : [ ip ] }}
+        payload = { "name" : zone_name,
+                    "type" : "A",
+                    "ttl" : 3600,
+                    "records" : [ ip ] }
         print "%s creating A record %s --> %s" % (tenant, zone_name, ip)
         resp = CLIENT.post_recordset(zone_id, data=json.dumps(payload),
                                      headers=prepare_headers(tenant))
@@ -149,7 +149,7 @@ def create_A_records(domains):
             error(resp.text)
             continue
 
-        recordset = resp.json()['recordset']
+        recordset = resp.json()
         record = recordset['records'][0]  # !
         val = (tenant, api_key, zone_id, zone_name, recordset['id'],
                record, recordset['type'])

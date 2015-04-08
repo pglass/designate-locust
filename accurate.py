@@ -88,16 +88,16 @@ def get_records_data(zone_infos, n, rtype):
 
         if rtype == 'A' and not len(resp.json()['recordsets']):
             ip = random_ip()
-            payload = {"recordset" : {"name" : zone_info.name,
-                                      "type" : "A",
-                                      "ttl" : 3600,
-                                      "records" : [ ip ] }}
+            payload = { "name" : zone_info.name,
+                        "type" : "A",
+                        "ttl" : 3600,
+                        "records" : [ ip ] }
             #print "%s creating A record %s --> %s" % (zone_info.tenant, zone_info.name, ip)
             resp = _designate_client.post_recordset(
                 zone_info.id, data=json.dumps(payload),
                 headers=prepare_headers_with_tenant(zone_info.tenant),
                 name='-- prep data')
-            recordset = resp.json()['recordset']
+            recordset = resp.json()
             record = recordset['records'][0]  # !
             val = RecordTuple(zone_info.tenant, zone_info.api_key, zone_info.id,
                               zone_info.name, recordset['id'], record,
@@ -291,9 +291,9 @@ class Tasks(TaskSet):
     def _do_create_domain(self, interval):
         zone, email = random_zone_email()
         headers = self.prepare_headers_with_tenant()
-        payload = {"zone": { "name": zone,
-                             "email": email,
-                             "ttl": 7200 }}
+        payload = { "name": zone,
+                    "email": email,
+                    "ttl": 7200 }
 
         # use the magical with block to let us specify when the request has
         # succeeded. this lets us poll until the status is ACTIVE or ERROR
@@ -310,13 +310,13 @@ class Tasks(TaskSet):
                 return
 
             api_call = lambda: self.designate_client.get_zone(
-                zone_id=post_resp.json()['zone']['id'],
+                zone_id=post_resp.json()['id'],
                 headers=headers,
                 name='/v2/zones (status of POST /v2/zones)')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
-                status_function=lambda r: r.json()['zone']['status'],
+                status_function=lambda r: r.json()['status'],
                 success_function=post_resp.success,
                 failure_function=post_resp.failure)
 
@@ -347,9 +347,9 @@ class Tasks(TaskSet):
     def _do_modify_domain(self, interval):
         zone_info = self.test_data.pick_zone_for_get()
         headers = self.prepare_headers_with_tenant(zone_info.tenant)
-        payload = { "zone": { "name": zone_info.name,
-                              "email": ("update@" + zone_info.name).strip('.'),
-                              "ttl": random.randint(2400, 7200) }}
+        payload = { "name": zone_info.name,
+                    "email": ("update@" + zone_info.name).strip('.'),
+                    "ttl": random.randint(2400, 7200) }
         with self.designate_client.patch_zone(
                 zone_info.id, data=json.dumps(payload), headers=headers,
                 name='/v2/zones/{id}', catch_response=True) as patch_resp:
@@ -368,7 +368,7 @@ class Tasks(TaskSet):
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
-                status_function=lambda r: r.json()['zone']['status'],
+                status_function=lambda r: r.json()['status'],
                 success_function=patch_resp.success,
                 failure_function=patch_resp.failure)
 
@@ -432,7 +432,7 @@ class Tasks(TaskSet):
     def list_records(self):
         """GET /zones/{id}/recordsets"""
         tenant, api_key, zone_id, zone_name = self.test_data.pick_zone_for_get()
-        headers=self.prepare_headers_with_tenant(tenant)
+        headers = self.prepare_headers_with_tenant(tenant)
         resp = self.designate_client.list_recordsets(
             zone_id, name='/v2/zones/{id}/recordsets', headers=headers,
             # at the time of this writing, designate didn't limit by default
@@ -463,10 +463,10 @@ class Tasks(TaskSet):
         headers = self.prepare_headers_with_tenant(zone_info.tenant)
 
         a_record_name = "{0}.{1}".format(randomize("record"), zone_info.name)
-        payload = {"recordset" : {"name" : a_record_name,
-                                  "type" : "A",
-                                  "ttl" : 3600,
-                                  "records" : [ random_ip() ] }}
+        payload = { "name" : a_record_name,
+                    "type" : "A",
+                    "ttl" : 3600,
+                    "records" : [ random_ip() ] }
 
         with self.designate_client.post_recordset(
                 zone_info.id,
@@ -484,13 +484,13 @@ class Tasks(TaskSet):
 
             api_call = lambda: self.designate_client.get_recordset(
                 zone_id=zone_info.id,
-                recordset_id=post_resp.json()['recordset']['id'],
+                recordset_id=post_resp.json()['id'],
                 headers=headers,
                 name='/v2/zones/{id}/recordsets/{id} (POST status check)')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
-                status_function=lambda r: r.json()['recordset']['status'],
+                status_function=lambda r: r.json()['status'],
                 success_function=post_resp.success,
                 failure_function=post_resp.failure)
 
@@ -508,12 +508,13 @@ class Tasks(TaskSet):
         if not record_info:
             print "modify_record: got None record_info"
             return
+
         headers = self.prepare_headers_with_tenant(record_info.tenant)
-        payload = { "recordset": { "records": [ random_ip() ],
-                                   "type": "A",
-                                   # TODO: is using zone_name right?
-                                   "name": record_info.zone_name,
-                                   "ttl": random.randint(2400, 7200) }}
+        payload = { "records": [ random_ip() ],
+                    "type": "A",
+                    # TODO: is using zone_name right?
+                    "name": record_info.zone_name,
+                    "ttl": random.randint(2400, 7200) }
         with self.designate_client.put_recordset(
                 record_info.zone_id,
                 record_info.record_id,
@@ -530,14 +531,14 @@ class Tasks(TaskSet):
                 return
 
             api_call = lambda: self.designate_client.get_recordset(
-                zone_id=put_resp.json()['recordset']['zone_id'],
-                recordset_id=put_resp.json()['recordset']['id'],
+                zone_id=put_resp.json()['zone_id'],
+                recordset_id=put_resp.json()['id'],
                 headers=headers,
                 name='/v2/zones/{id}/recordsets/{id} (PUT status check)')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
-                status_function=lambda r: r.json()['recordset']['status'],
+                status_function=lambda r: r.json()['status'],
                 success_function=put_resp.success,
                 failure_function=put_resp.failure)
 

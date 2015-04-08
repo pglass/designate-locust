@@ -113,14 +113,14 @@ class DigaasBehaviors(object):
         """
         # digaas uses the start_time when computing the propagation
         # time to the nameserver. We're assuming this time is UTC.
-        start_time = self.parse_created_at(resp.json()['zone']['created_at'])
+        start_time = self.parse_created_at(resp.json()['created_at'])
 
         for nameserver in self.config.nameservers:
             # print "  POST digaas (create/update zone) - %s" % nameserver
             r = self.client.post_poll_request(
                 nameserver = nameserver,
-                query_name = resp.json()['zone']['name'],
-                serial = resp.json()['zone']['serial'],
+                query_name = resp.json()['name'],
+                serial = resp.json()['serial'],
                 start_time = self.to_timestamp(start_time),
                 condition = "serial_not_lower",
                 timeout = self.config.digaas_timeout,
@@ -142,10 +142,10 @@ class DigaasBehaviors(object):
             self._debug_resp(r)
 
     def check_record_create_or_update(self, resp):
-        record_name = resp.json()["recordset"]["name"]
-        expected_data = resp.json()["recordset"]["records"][0]
-        record_type = resp.json()["recordset"]["type"]
-        start_time = self.parse_created_at(resp.json()['recordset']['created_at'])
+        record_name = resp.json()["name"]
+        expected_data = resp.json()["records"][0]
+        record_type = resp.json()["type"]
+        start_time = self.parse_created_at(resp.json()['created_at'])
 
         for nameserver in self.config.nameservers:
             # print "  POST digaas (create/update recordset) - %s" % nameserver
@@ -191,9 +191,6 @@ def fetch_plot(client, start_time, end_time, output_filename):
             with open(output_path, 'wb') as f:
                 shutil.copyfileobj(image_resp.raw, f)
             break
-
-
-
 
 
 def persist_digaas_data(stats, digaas_client):

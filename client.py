@@ -34,7 +34,7 @@ class DesignateClient(object):
     #############################################
     def patch_quotas(self, tenant, *args, **kwargs):
         self._prepare_headers(kwargs)
-        url = "/v2/quotas/{0}".format(tenant)
+        url = "/admin/quotas/{0}".format(tenant)
         return self.client.patch(url, *args, **kwargs)
 
     #############################################
