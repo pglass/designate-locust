@@ -2,7 +2,7 @@ import sys
 import argparse
 import getpass
 import requests
-from requests.auth import HTTPDigestAuth
+from requests.auth import HTTPBasicAuth
 
 def parse_args():
     p = argparse.ArgumentParser(description="Controls a Locust cluster")
@@ -32,11 +32,11 @@ def start_locust(args):
     return requests.post(args.locust_endpoint.strip('/') + '/swarm',
                          data={'locust_count': args.locust_count,
                                'hatch_rate': args.hatch_rate },
-                         auth=HTTPDigestAuth(args.username, args.password))
+                         auth=HTTPBasicAuth(args.username, args.password))
 
 def stop_locust(args):
     return requests.get(args.locust_endpoint.strip('/') + '/stop',
-                        auth=HTTPDigestAuth(args.username, args.password))
+                        auth=HTTPBasicAuth(args.username, args.password))
 
 def handle_args(args):
     if not args.locust_endpoint.startswith('http'):
