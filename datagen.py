@@ -18,4 +18,16 @@ def select_random_item(vals):
         return random.choice(vals)
     return None
 
+def random_zone_file(name='random_import', user='rando'):
+    name = randomize(randomize(name))
+    zone = "{0}.com.".format(name)
+    email = "{0}.{1}".format(user, zone)
 
+    result = ""
+    result += "$ORIGIN %s\n" % zone
+    result += "\n"
+    result += "@ IN SOA ns.{0} {1} 100 101 102 103 104\n".format(zone, email)
+    result += "@ IN NS ns.%s\n" % zone
+    result += "ns.%s IN A %s\n" % (zone, random_ip())
+    result += "mail.%s IN A %s\n" % (zone, random_ip())
+    return result

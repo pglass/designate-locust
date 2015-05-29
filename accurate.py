@@ -280,6 +280,48 @@ class Tasks(TaskSet):
                                                  headers=headers)
 
     @task
+    def import_zone(self):
+        """POST /zones/tasks/import, Content-type: text/dns"""
+        gevent.spawn(GREENLET_MANAGER.tracked_greenlet,
+                     lambda: self._do_import_zone(interval=2),
+                     timeout=120)
+
+    def _do_import_zone(self, interval):
+        zone_file = random_zone_file()
+        headers = self.prepare_headers_with_tenant()
+        with self.designate_client.import_zone(data=zone_file,
+                                               name='/v2/zones/tasks/imports',
+                                               headers=headers,
+                                               catch_response=True) as import_resp:
+
+            print "[%s]: %s\n%s\nResponse:\n%s" % (
+                import_resp.status_code,
+                import_resp.request.url,
+                import_resp.request.body,
+                import_resp.text)
+
+            # TODO: tell digaas to check the zone name. we need the zone name here.
+            # if CONFIG.use_digaas and import_resp.ok:
+            #     self.digaas_behaviors.check_zone_create_or_update(import_resp)
+
+            if not import_resp.ok:
+                import_resp.failure("Failed with status code %s" % import_resp.status_code)
+                return
+
+            api_call = lambda: self.designate_client.get_zone_import(
+                import_id=import_resp.json()['id'],
+                headers=headers,
+                name='/v2/zones (status of POST /v2/zones/tasks/imports)')
+
+            self._poll_until_active_or_error(
+                api_call=api_call,
+                interval=interval,
+                status_function=lambda r: r.json()['status'],
+                success_function=import_resp.success,
+                failure_function=import_resp.failure,
+                expected='COMPLETE')
+
+    @task
     def create_domain(self):
         """POST /zones"""
         gevent.spawn(
@@ -321,13 +363,14 @@ class Tasks(TaskSet):
                 failure_function=post_resp.failure)
 
     def _poll_until_active_or_error(self, api_call, interval, status_function,
-                                    success_function, failure_function):
+                                    success_function, failure_function,
+                                    expected='ACTIVE'):
         # NOTE: this is assumed to be run in a separate greenlet. We use
         # `while True` here, and use gevent to manage a timeout or to kill
         # the greenlet externally.
         while True:
             resp = api_call()
-            if resp.ok and status_function(resp) == 'ACTIVE':
+            if resp.ok and status_function(resp) == expected:
                 success_function()
                 break
             elif resp.ok and status_function(resp) == 'ERROR':
@@ -601,6 +644,7 @@ class LargeTasks(Tasks):
         Tasks.get_domain_by_id:   CONFIG.large_weights.get_domain_by_id,
         Tasks.get_domain_by_name: CONFIG.large_weights.get_domain_by_name,
         Tasks.list_domains:       CONFIG.large_weights.list_domain,
+        Tasks.import_zone:        CONFIG.large_weights.import_zone,
         Tasks.export_domain:      CONFIG.large_weights.export_domain,
         Tasks.create_domain:      CONFIG.large_weights.create_domain,
         Tasks.modify_domain:      CONFIG.large_weights.modify_domain,
@@ -623,6 +667,7 @@ class SmallTasks(Tasks):
         Tasks.get_domain_by_id:   CONFIG.small_weights.get_domain_by_id,
         Tasks.get_domain_by_name: CONFIG.small_weights.get_domain_by_name,
         Tasks.list_domains:       CONFIG.small_weights.list_domain,
+        Tasks.import_zone:        CONFIG.small_weights.import_zone,
         Tasks.export_domain:      CONFIG.small_weights.export_domain,
         Tasks.create_domain:      CONFIG.small_weights.create_domain,
         Tasks.modify_domain:      CONFIG.small_weights.modify_domain,
@@ -645,7 +690,6 @@ class AccurateTaskSet(TaskSet):
         LargeTasks: CONFIG.total_large_weight,
         SmallTasks: CONFIG.total_small_weight,
     }
-
 
 class Locust(HttpLocust):
     task_set = AccurateTaskSet

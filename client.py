@@ -70,9 +70,15 @@ class DesignateClient(object):
 
     def import_zone(self, data, *args, **kwargs):
         """data should be the text from a zone file."""
-        kwargs["headers"] = {"Content-Type": "text/dns"}
         self._prepare_headers(kwargs)
-        return self.client.post("/v2/zones", data=data, *args, **kwargs)
+        kwargs["headers"]["Content-Type"] = "text/dns"
+        return self.client.post("/v2/zones/tasks/imports", data=data, *args,
+                                **kwargs)
+
+    def get_zone_import(self, import_id, *args, **kwargs):
+        self._prepare_headers(kwargs)
+        url = "/v2/zones/tasks/imports/{0}".format(import_id)
+        return self.client.get(url, *args, **kwargs)
 
     def export_zone(self, zone_id, *args, **kwargs):
         kwargs['headers']['Accept'] = 'text/dns'
