@@ -83,7 +83,7 @@ class DesignateClient(object):
     def export_zone(self, zone_id, *args, **kwargs):
         kwargs['headers']['Accept'] = 'text/dns'
         self._prepare_headers(kwargs)
-        url = "/v2/zones/{0}".format(zone_id)
+        url = "/admin/zones/export/{0}".format(zone_id)
         return self.client.get(url, *args, **kwargs)
 
     #############################################

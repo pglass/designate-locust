@@ -3,6 +3,12 @@ import gevent
 
 class GreenletManager(list):
 
+    @classmethod
+    def get(cls, _instance=[]):
+        if not _instance:
+            _instance.append(GreenletManager())
+        return _instance[0]
+
     def tracked_greenlet(self, f, timeout=10):
         """A wrapper function that stores the current greenlet in list in order
         to keep track of our asynchronous request 'threads'. The greenlet
