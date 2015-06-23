@@ -49,21 +49,9 @@ web.app.jinja_loader = jinja2.ChoiceLoader([
     jinja2.FileSystemLoader([module_dir.rstrip('/') + '/templates'])
 ])
 
-@web.app.route('/plots/line.svg')
-def line_plot():
-    return flask.send_from_directory(module_dir, 'line.svg')
-
-@web.app.route('/plots/box.svg')
-def box_plot():
-    return flask.send_from_directory(module_dir, 'box.svg')
-
-@web.app.route('/plots/scatter.svg')
-def scatter_plot():
-    return flask.send_from_directory(module_dir, 'scatter.svg')
-
-@web.app.route('/plots/scatter.png')
-def scatter_png():
-    return flask.send_from_directory(module_dir, 'scatter.png')
+def extract_timestamp(filename):
+    head, tail = os.path.split(filename.strip('/'))
+    return int(tail.strip('stats').strip('.json')), tail
 
 @web.app.route('/reports')
 def reports():
@@ -71,15 +59,19 @@ def reports():
     stats_files = persistence.list_stats_files()
     if not stats_files:
         return "No reports found"
-
-    def extract_timestamp(filename):
-        head, tail = os.path.split(filename.strip('/'))
-        return int(tail.strip('stats').strip('.json')), tail
-
     time_pairs = [(datetime.datetime.fromtimestamp(x), x, filename)
                   for x, filename in map(extract_timestamp, stats_files)]
     time_pairs.sort(key=lambda t: -t[1])
     return flask.render_template('reports_index.html', time_pairs=time_pairs)
+
+@web.app.route('/reports/json')
+def reports_json():
+    stats_files = persistence.list_stats_files()
+    result = [{ "timestamp": stamp,
+                "path": "/reports/{0}".format(filename) }
+              for stamp, filename in (extract_timestamp(f) for f in stats_files)]
+    result.sort(key=lambda item: -item['timestamp'])
+    return flask.Response(json.dumps(result), mimetype='application/json')
 
 @web.app.route('/images/<name>')
 def image(name):

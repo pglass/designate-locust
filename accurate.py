@@ -52,8 +52,8 @@ if CONFIG.use_digaas and not insight.is_slave():
 if not insight.is_master():
     LARGE_DATA = TestData(CONFIG.large_tenants)
     SMALL_DATA = TestData(CONFIG.small_tenants)
-    locust.events.state_changed += \
-        lambda previous, current: refresh_test_data(previous, current, LARGE_DATA, SMALL_DATA)
+    locust.events.state_changed += lambda previous, current: \
+        refresh_test_data(previous, current, LARGE_DATA, SMALL_DATA)
 
     # the greenlet_manager keeps track of greenlets spawned for polling
     # note: it's hard to ensure cleanup_greenlets gets run before the stats
