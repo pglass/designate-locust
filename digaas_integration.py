@@ -185,9 +185,10 @@ def fetch_plot(client, start_time, end_time, output_filename):
             image_id = resp.json()['image_id']
             print "image_id = %s" % image_id
             image_resp = client.get_image(image_id)
-            print "writing to file %s" % output_filename
             # save all images to the images directory
             output_path = os.path.join(persistence.images_dir, output_filename)
+            output_path = os.path.abspath(output_path)
+            print "writing to file %s" % output_path
             with open(output_path, 'wb') as f:
                 shutil.copyfileobj(image_resp.raw, f)
             break

@@ -19,8 +19,9 @@ def ensure_dir_exists(d):
     if not os.path.exists(d):
         os.mkdir(d)
 
-stats_dir = './saved_stats'
-images_dir = './images'
+module_dir = os.path.dirname(os.path.realpath(__file__))
+stats_dir = os.path.join(module_dir, 'saved_stats')
+images_dir = os.path.join(module_dir, 'images')
 ensure_dir_exists(stats_dir)
 ensure_dir_exists(images_dir)
 
