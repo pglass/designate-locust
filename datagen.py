@@ -16,7 +16,12 @@ def select_random_item(vals):
     """Return a random item in this list, or None if empty."""
     if vals:
         return random.choice(vals)
-    return None
+
+def pop_random_item(vals):
+    """Remove and return a random item from the list, or None"""
+    if vals:
+        i = random.randrange(0, len(vals))
+        return vals.pop(i)
 
 def random_zone_file(name='random_import', user='rando'):
     name = randomize(randomize(name))

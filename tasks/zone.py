@@ -1,10 +1,10 @@
 import json
 
 from locust import TaskSet
-from locust import task
 import gevent
 
 from base import BaseTaskSet
+from models import Zone
 import client
 from datagen import *
 from greenlet_manager import GreenletManager
@@ -13,58 +13,62 @@ import accurate_config as CONFIG
 
 class ZoneTasks(BaseTaskSet):
 
-    @task
     def get_domain_by_id(self):
         """GET /zones/{id}"""
-        zone_info = self.test_data.pick_zone_for_get()
-        # print "get_domain_by_id: %s, %s, %s" % (tenant, zone_id, zone_name)
-        # headers = self.prepare_headers_with_tenant(tenant_id=zone_info.tenant)
+        tenant = self.select_random_tenant()
+        zone = tenant.data.select_zone_for_get()
+        if not zone:
+            print "WARNING: %s has no zones for getting" % tenant
+            return
         resp = self.designate_client.get_zone(
-            zone_info.id,
+            zone.id,
             name='/v2/zones/{id}',
-            headers=self.get_headers(tenant=zone_info.tenant))
+            headers=self.get_headers(tenant.id))
 
-    @task
     def get_domain_by_name(self):
         """GET /zones?name=<name>"""
-        zone_info = self.test_data.pick_zone_for_get()
+        tenant = self.select_random_tenant()
+        zone = tenant.data.select_zone_for_get()
+        if not zone:
+            print "WARNING: %s has no zones for getting" % tenant
+            return
         # print "get_domain_by_name: %s, %s, %s" % (tenant, zone_id, zone_name)
         resp = self.designate_client.get_zone_by_name(
-            zone_name=zone_info.name,
+            zone_name=zone.name,
             name='/v2/zones/{id}?name=zoneNAME',
-            headers=self.get_headers(tenant=zone_info.tenant))
+            headers=self.get_headers(tenant.id))
 
-    @task
     def list_domains(self):
         """GET /zones"""
-        headers = self.get_headers()
+        tenant = self.select_random_tenant()
+        headers = self.get_headers(tenant.id)
         self.designate_client.list_zones(name='/v2/zones', headers=headers,
             # at the time of this writing, designate didn't limit by default
             params={'limit': 100})
 
-    @task
     def export_domain(self):
         """GET /zone/{id}, Accept: text/dns"""
-        zone_info = self.test_data.pick_zone_for_get()
+        tenant = self.select_random_tenant()
+        zone = tenant.data.select_zone_for_get()
         # print "export_domain: %s, %s, %s" % (tenant, zone_id, zone_name)
-        headers = self.get_headers(zone_info.tenant)
-        resp = self.designate_client.export_zone(zone_info.id,
+        headers = self.get_headers(tenant.id)
+        resp = self.designate_client.export_zone(zone.id,
                                                  name='/v2/zones/{id} (export)',
                                                  headers=headers)
 
-    @task
     def create_domain(self):
         """POST /zones"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_create_domain(interval=2),
+            lambda: self._do_create_domain(interval=0.5),
             timeout=60
         )
 
     def _do_create_domain(self, interval):
-        zone, email = random_zone_email()
-        headers = self.get_headers()
-        payload = { "name": zone,
+        tenant = self.select_random_tenant()
+        zone_name, email = random_zone_email()
+        headers = self.get_headers(tenant.id)
+        payload = { "name": zone_name,
                     "email": email,
                     "ttl": 7200 }
 
@@ -93,7 +97,15 @@ class ZoneTasks(BaseTaskSet):
                 success_function=post_resp.success,
                 failure_function=post_resp.failure)
 
-    @task
+            # if we successfully created the zone, add it to our list
+            # todo: add some domains to the delete list
+            resp = api_call()
+            if resp.ok and resp.json()['status'] == 'ACTIVE':
+                zone = Zone(resp.json()['id'], resp.json()['name'])
+                print "{0} -- Added zone {1}".format(tenant, zone)
+                tenant.data.zones_for_get.append(zone)
+                print "have %s zones" % tenant.data.zone_count()
+
     def import_zone(self):
         """POST /zones/tasks/import, Content-type: text/dns"""
         gevent.spawn(GreenletManager.get().tracked_greenlet,
@@ -101,8 +113,9 @@ class ZoneTasks(BaseTaskSet):
                      timeout=120)
 
     def _do_import_zone(self, interval):
+        tenant = self.select_random_tenant()
         zone_file = random_zone_file()
-        headers = self.get_headers()
+        headers = self.get_headers(tenant.id)
         with self.designate_client.import_zone(data=zone_file,
                                                name='/v2/zones/tasks/imports',
                                                headers=headers,
@@ -135,7 +148,6 @@ class ZoneTasks(BaseTaskSet):
                 failure_function=import_resp.failure,
                 expected='COMPLETE')
 
-    @task
     def modify_domain(self):
         """PATCH /zones/{id}"""
         gevent.spawn(
@@ -145,13 +157,14 @@ class ZoneTasks(BaseTaskSet):
         )
 
     def _do_modify_domain(self, interval):
-        zone_info = self.test_data.pick_zone_for_get()
-        headers = self.get_headers(zone_info.tenant)
-        payload = { "name": zone_info.name,
-                    "email": ("update@" + zone_info.name).strip('.'),
+        tenant = self.select_random_tenant()
+        zone = tenant.data.select_zone_for_get()
+        headers = self.get_headers(tenant.id)
+        payload = { "name": zone.name,
+                    "email": ("update@" + zone.name).strip('.'),
                     "ttl": random.randint(2400, 7200) }
         with self.designate_client.patch_zone(
-                zone_info.id, data=json.dumps(payload), headers=headers,
+                zone.id, data=json.dumps(payload), headers=headers,
                 name='/v2/zones/{id}', catch_response=True) as patch_resp:
 
             if CONFIG.use_digaas and patch_resp.ok:
@@ -162,7 +175,7 @@ class ZoneTasks(BaseTaskSet):
                 return
 
             api_call = lambda: self.designate_client.get_zone(
-                zone_id=zone_info.id,
+                zone_id=zone.id,
                 headers=headers,
                 name='/v2/zones (status of PATCH /v2/zones/{id})')
             self._poll_until_active_or_error(
@@ -188,7 +201,6 @@ class ZoneTasks(BaseTaskSet):
                 break
             gevent.sleep(interval)
 
-    @task
     def remove_domain(self):
         """DELETE /zones/{id}"""
         gevent.spawn(
@@ -198,12 +210,13 @@ class ZoneTasks(BaseTaskSet):
         )
 
     def _do_remove_domain(self, interval):
-        zone_info = self.test_data.pick_zone_for_delete()
-        if zone_info is None:
+        tenant = self.select_random_tenant()
+        zone = tenant.data.pop_zone_for_delete()
+        if zone is None:
             print "remove_domain: got None zone_info -- probably ran out of zones to delete"
             return
 
-        headers = self.get_headers(zone_info.tenant)
+        headers = self.get_headers(tenant.id)
 
         # digaas uses the start_time when computing the propagation
         # time to the nameserver. We're assuming this time is UTC.
@@ -216,14 +229,14 @@ class ZoneTasks(BaseTaskSet):
             start_time = datetime.datetime.now()
 
         with self.designate_client.delete_zone(
-                zone_info.id, headers=headers, name='/v2/zones/{id}',
+                zone.id, headers=headers, name='/v2/zones/{id}',
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
-                self.digaas_behaviors.check_name_removed(zone_info.name, start_time)
+                self.digaas_behaviors.check_name_removed(zone.name, start_time)
 
             api_call = lambda: self.designate_client.get_zone(
-                zone_info.id, headers=headers, catch_response=True,
+                zone.id, headers=headers, catch_response=True,
                 name='/v2/zones (status of DELETE /v2/zones/{id})')
             self._poll_until_404(api_call, interval,
                 success_function=del_resp.success,

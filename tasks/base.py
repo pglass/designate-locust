@@ -1,17 +1,21 @@
+from collections import namedtuple
+
 from locust import TaskSet
+
 import digaas_integration
 import client
 import accurate_config as CONFIG
+from datagen import select_random_item
 
 
 class BaseTaskSet(TaskSet):
 
-    def __init__(self, test_data, *args, **kwargs):
+    def __init__(self, tenant_list, *args, **kwargs):
         super(BaseTaskSet, self).__init__(*args, **kwargs)
 
         self.designate_client = client.DesignateClient(self.client)
 
-        self.test_data = test_data
+        self.tenant_list = tenant_list
 
         if CONFIG.use_digaas:
             self.digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
@@ -20,4 +24,7 @@ class BaseTaskSet(TaskSet):
     def get_headers(self, tenant=None):
         return {
             client.ROLE_HEADER: 'admin',
-            client.PROJECT_ID_HEADER: tenant or self.test_data.pick_random_tenant() }
+            client.PROJECT_ID_HEADER: tenant }
+
+    def select_random_tenant(self):
+        return select_random_item(self.tenant_list)

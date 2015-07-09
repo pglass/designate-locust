@@ -190,10 +190,10 @@ if __name__ == '__main__':
     ns_records = get_records_of_type(domains, 'NS')
     a_records = create_A_records(domains)
 
-    save_domains('domains.dat', domains)
-    save_domains('domainsdelete.dat', del_domains)
-    save_records('records.dat', ns_records)
-    save_records('recordsdelete.dat', a_records)
+    #save_domains('domains.dat', domains)
+    #save_domains('domainsdelete.dat', del_domains)
+    #save_records('records.dat', ns_records)
+    #save_records('recordsdelete.dat', a_records)
 
     if ERR_FLAG:
         print "Terminating gracefully, but some requests failed."
