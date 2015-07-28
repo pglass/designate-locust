@@ -185,9 +185,9 @@ def save_records(filename, records):
 
 if __name__ == '__main__':
     increase_quotas()
-    domains = create_domains(ARGS.n_domains_per_tenant, prefix='getdomain')
-    del_domains = create_domains(ARGS.n_domains_per_tenant, prefix='deletedomain')
-    ns_records = get_records_of_type(domains, 'NS')
+    domains = create_domains(ARGS.n_domains_per_tenant, prefix='testdomain')
+    # del_domains = create_domains(ARGS.n_domains_per_tenant, prefix='deletedomain')
+    # ns_records = get_records_of_type(domains, 'NS')
     a_records = create_A_records(domains)
 
     #save_domains('domains.dat', domains)

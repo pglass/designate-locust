@@ -5,6 +5,7 @@ import random
 import datetime
 
 from locust import web
+import locust.runners
 import locust.stats
 import flask
 from flask import request
@@ -105,3 +106,8 @@ def report(name):
     propagation_plot = stats['digaas'].get('plot_file') if 'digaas' in stats else None
     return flask.render_template('report.html', stats=stats, timeinfo=timeinfo,
             propagation_plot=propagation_plot)
+
+@web.app.route('/status')
+def status():
+    result = {"status": locust.runners.locust_runner.state}
+    return flask.Response(json.dumps(result), mimetype='application/json')

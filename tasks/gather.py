@@ -47,15 +47,17 @@ class PaginationFrontier(object):
 
 class GatherTasks(BaseTaskSet):
 
+    frontier = None
+
     def __init__(self, *args, **kwargs):
         super(GatherTasks, self).__init__(*args, **kwargs)
-        # we want to modify this tenant list as we go, so make sure to copy
         self.on_start()
 
     def on_start(self):
         print "GatherTasks.on_start()"
         print "tenants = {0}".format(self.tenant_list)
-        self.frontier = PaginationFrontier(self.tenant_list)
+        if not GatherTasks.frontier:
+            GatherTasks.frontier = PaginationFrontier(self.tenant_list)
 
     def _get_path_from_full_url(self, link):
         parts = link.split('/v2/')
@@ -81,8 +83,6 @@ class GatherTasks(BaseTaskSet):
             print "we're done! -- %s.done_gathering" % self.__class__.__name__
             self.done_gathering.fire()
             return
-
-        locust.runners.locust_runner.state = locust.runners.STATE_HATCHING
 
         # grab a list zones link from our 'frontier' of links
         link, tenant = self.frontier.pop_next_zone_link()

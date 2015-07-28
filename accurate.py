@@ -50,10 +50,10 @@ if CONFIG.use_digaas and not insight.is_slave():
     digaas_integration.setup_digaas_integration(_digaas_client)
 
 if not insight.is_master():
-    SMALL_TENANTS = [ Tenant(id=id, api_key=None, type=Tenant.SMALL)
-                      for id in CONFIG.small_tenants ]
-    LARGE_TENANTS = [ Tenant(id=id, api_key=None, type=Tenant.LARGE)
-                     for id in CONFIG.large_tenants ]
+    SMALL_TENANTS = [Tenant(id=id, api_key=None, type=Tenant.SMALL)
+                      for id in CONFIG.small_tenants]
+    LARGE_TENANTS = [Tenant(id=id, api_key=None, type=Tenant.LARGE)
+                     for id in CONFIG.large_tenants]
     ALL_TENANTS = SMALL_TENANTS + LARGE_TENANTS
 
     # the greenlet_manager keeps track of greenlets spawned for polling
@@ -176,17 +176,26 @@ class GatherShim(GatherTasks):
 
     def __init__(self, *args, **kwargs):
         super(GatherShim, self).__init__(ALL_TENANTS, *args, **kwargs)
-        print "init GatherShim"
 
 class GatherData(TaskSet):
 
-    tasks = [ GatherShim ]
+    tasks = [GatherShim]
+
+    ALREADY_GATHERED = False
+    HATCH_COMPLETE_HANDLERS = None
+
+    @classmethod
+    def set_already_gathered(cls, val):
+        cls.ALREADY_GATHERED = val
+
+    @classmethod
+    def has_already_gathered(cls):
+        return cls.ALREADY_GATHERED
 
     def __init__(self, *args, **kwargs):
         super(GatherData, self).__init__(*args, **kwargs)
-        self.hatch_complete_handlers = None
         self.is_done = False
-        self.already_did_it = False
+        self.already_did_it = self.has_already_gathered()
 
         def _handler():
             self.is_done = True
@@ -194,80 +203,78 @@ class GatherData(TaskSet):
         GatherShim.done_gathering += _handler
 
     def on_start(self):
-        self.disable_hatch_complete_handlers()
+        if not self.has_already_gathered():
+            self.disable_hatch_complete_handlers()
 
-    def disable_hatch_complete_handlers(self):
-        print "disable_hatch_complete_handlers"
+    @classmethod
+    def disable_hatch_complete_handlers(cls):
         # disable hatch complete handlers to delay the hatch complete event
-        if self.hatch_complete_handlers is None:
-            self.hatch_complete_handlers = locust.events.hatch_complete._handlers
+        if cls.HATCH_COMPLETE_HANDLERS is None:
+            cls.HATCH_COMPLETE_HANDLERS = locust.events.hatch_complete._handlers
             locust.events.hatch_complete._handlers = []
 
-    def restore_hatch_complete_handlers(self):
-        print "restore_hatch_complete_handlers"
-        if locust.runners.locust_runner.state == locust.runners.STATE_HATCHING \
-                and self.hatch_complete_handlers is not None:
-            print locust.events.hatch_complete._handlers
-            locust.events.hatch_complete._handlers = self.hatch_complete_handlers
-            self.hatch_complete_handlers = None
+    @classmethod
+    def restore_hatch_complete_handlers(cls):
+        if cls.HATCH_COMPLETE_HANDLERS is not None:
+            locust.events.hatch_complete._handlers = cls.HATCH_COMPLETE_HANDLERS
+            cls.HATCH_COMPLETE_HANDLERS = None
 
     def be_done_if_done(self):
         if not self.already_did_it and self.is_done:
-            print "be_done_if_done!"
+            locust.runners.locust_runner.state = locust.runners.STATE_HATCHING
             self.restore_hatch_complete_handlers()
             locust.events.hatch_complete.fire(user_count=locust.runners.locust_runner.user_count)
             self.already_did_it = True
+
 
 class TaskSwitcher(TaskSet):
     """This is a bit of a hack. This will use one set of tasks for hatching and
     a different set of tasks otherwise. This lets us easily do data preparation
     before the perf test starts using one set of task weights, and then run the
     performance test with the usual set of task weights.
-
-    TODO: only use the hatching task set on the first hatch.
-        we want dynamic changes in the number of users to work right.
-    TODO: if we data prep on one instance and save a bunch of zones to that
-        instance, and then we switch to a different instance to a
     """
 
     tasks = []
+
+    regular_tasks = None
+    gathering_tasks = None
 
     def __init__(self, *args, **kwargs):
         super(TaskSwitcher, self).__init__(*args, **kwargs)
         # this is a little awkward, but it works. these must be instances
         # of a class that has the task methods as members.
-        self.regular_tasks = AccurateTaskSet(*args, **kwargs)
-        self.hatching_tasks = GatherData(*args, **kwargs)
-        # self.hatching_tasks = GatherTaskSet(SMALL_DATA, *args, **kwargs)
-        # self.hatching_tasks = HatchingSmallTaskSet(*args, **kwargs)
-        print self.regular_tasks.tasks
-        print self.hatching_tasks.tasks
-        # self.hatching_tasks = HatchingSmallTaskSet(*args, **kwargs)
+        if TaskSwitcher.regular_tasks is None:
+            TaskSwitcher.regular_tasks = AccurateTaskSet(*args, **kwargs)
+        if TaskSwitcher.gathering_tasks is None:
+            TaskSwitcher.gathering_tasks = GatherData(*args, **kwargs)
 
-        def on_hatch_complete_poo(user_count):
-            print "HATCH COMPLETE"
-            print "before:", self.tasks
+        locust.events.locust_start_hatching._handlers = []
+
+        def on_hatch_complete(user_count):
+            if not GatherData.has_already_gathered():
+                locust.runners.locust_runner.stats.reset_all()
+            GatherData.set_already_gathered(True)
             self.tasks = self.regular_tasks.tasks
-            print "after:", self.tasks
             self.interrupt()
-        locust.events.hatch_complete += on_hatch_complete_poo
+        locust.events.hatch_complete += on_hatch_complete
 
     def on_start(self):
-        self.hatching_tasks.on_start()
+        self.gathering_tasks.on_start()
+
+    def need_to_gather(self):
+        if GatherData.has_already_gathered():
+            return False
+        state = locust.runners.locust_runner.state
+        return state in (None, locust.runners.STATE_INIT, locust.runners.STATE_HATCHING)
 
     def get_next_task(self):
-        print "get_next_task"
-        if locust.runners.locust_runner.state in \
-                (None, locust.runners.STATE_INIT, locust.runners.STATE_HATCHING):
-            self.tasks = self.hatching_tasks.tasks
-            print "Using hatching tasks"
-            print self.tasks
+        if self.need_to_gather():
+            self.tasks = self.gathering_tasks.tasks
+            print "Using gathering tasks"
         else:
             self.tasks = self.regular_tasks.tasks
             print "Using regular tasks"
-            print self.tasks
         next_task = super(TaskSwitcher, self).get_next_task()
-        print "next task =", next_task
         return next_task
 
 class Locust(HttpLocust):
