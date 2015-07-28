@@ -1,11 +1,13 @@
-from base import BaseTaskSet
-
-from models import Zone, Recordset
+import logging
 
 import locust.events
 import locust.runners
 
+from base import BaseTaskSet
+from models import Zone, Recordset
 import accurate_config as CONFIG
+
+LOG = logging.getLogger(__name__)
 
 
 class PaginationFrontier(object):
@@ -49,13 +51,14 @@ class GatherTasks(BaseTaskSet):
 
     frontier = None
 
-    def __init__(self, *args, **kwargs):
-        super(GatherTasks, self).__init__(*args, **kwargs)
-        self.on_start()
+    def _log_tenants(self):
+        LOG.info("---- tenants -----")
+        for t in self.tenant_list:
+            LOG.info(str(t))
 
     def on_start(self):
-        print "GatherTasks.on_start()"
-        print "tenants = {0}".format(self.tenant_list)
+        LOG.debug("GatherTasks.on_start()")
+        self._log_tenants()
         if not GatherTasks.frontier:
             GatherTasks.frontier = PaginationFrontier(self.tenant_list)
 
@@ -72,15 +75,15 @@ class GatherTasks(BaseTaskSet):
                 n_delete_recordsets = CONFIG.n_recordsets_for_delete_per_tenant)
 
             if enough_zones_and_recordsets:
-                print "%s has enough stuff!" % tenant
+                LOG.info("%s has enough stuff!" % tenant)
                 self.frontier.remove_tenant(tenant)
-                print "Tenants left: {0}".format(self.frontier.tenant_list)
+                LOG.debug("Tenants left: {0}".format(self.frontier.tenant_list))
 
         return self.frontier.is_empty()
 
     def gather_zones(self):
         if self.done():
-            print "we're done! -- %s.done_gathering" % self.__class__.__name__
+            LOG.debug("we're done!")
             self.done_gathering.fire()
             return
 
@@ -94,11 +97,12 @@ class GatherTasks(BaseTaskSet):
         resp = self.client.get(link, headers=headers, name='/v2/zones')
         zones = resp.json()['zones']
         links = resp.json()['links']
-        print "%s -- fetched %s zones for tenant %s" % (resp.request.url, len(zones), tenant)
+        LOG.info("%s -- fetched %s zones for tenant %s",
+                resp.request.url, len(zones), tenant)
         if 'next' in links:
             self.frontier.add_zone_link(links['next'], tenant)
         else:
-            print "no more zone 'next' links to pursue"
+            LOG.debug("no more zone 'next' links to pursue")
         for z in zones:
             zone = Zone(z['id'], z['name'])
 
@@ -113,7 +117,7 @@ class GatherTasks(BaseTaskSet):
 
     def gather_recordsets(self):
         if self.done():
-            print "we're done! -- %s.done_gathering" % self.__class__.__name__
+            LOG.debug("we're done!")
             self.done_gathering.fire()
             return
 
@@ -127,8 +131,8 @@ class GatherTasks(BaseTaskSet):
         recordsets = resp.json()['recordsets']
         links = resp.json()['links']
 
-        print "{0} -- fetched {1} recordsets for tenant {2}".format(
-            resp.request.url, len(recordsets), tenant)
+        LOG.info("%s -- fetched %s recordsets for tenant %s",
+                resp.request.url, len(recordsets), tenant)
         if 'next' in links:
             self.frontier.add_recordset_link(zone, links['next'], tenant)
 

@@ -1,4 +1,6 @@
 import sys
+import logging
+
 import locust
 import gevent
 from gevent.socket import socket
@@ -6,20 +8,21 @@ from gevent.queue import Queue
 
 import insight
 
+LOG = logging.getLogger(__name__)
+
 graphite_queue = Queue()
 
 
 def graphite_worker(host, port):
     """The worker pops each item off the queue and sends it to graphite."""
-    print 'connecting to graphite on (%s, %s)' % (host, port)
     sock = socket()
     try:
         sock.connect((host, port))
     except Exception as e:
-        raise Exception(
-            "Couldn't connect to Graphite server {0} on port {1}: {2}"
-            .format(host, port, e))
-    print 'done connecting to graphite'
+        LOG.error("Failed to connect to Graphite at {0}:{1}".format(host, port))
+        return
+
+    LOG.info("Connected to graphite at {0}:{1}".format(host, port))
 
     while True:
         data = graphite_queue.get()

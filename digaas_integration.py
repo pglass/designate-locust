@@ -12,7 +12,7 @@ There are two things here:
 """
 
 import datetime
-import locust
+import logging
 import json
 import os
 import requests
@@ -20,10 +20,13 @@ import shutil
 import time
 import uuid
 
+import locust
 import gevent
 
 import insight
 import persistence
+
+LOG = logging.getLogger(__name__)
 
 
 class DigaasClient(object):
@@ -102,9 +105,10 @@ class DigaasBehaviors(object):
 
     def _debug_resp(self, resp):
         if not resp.ok:
-            print "Digaas request failed:"
-            print resp.request.body
-            print resp.text
+            LOG.error("Digaas request failed")
+            LOG.error("  request body: %s", resp.request.body)
+            LOG.error("  response text: %s", resp.text)
+
 
     def check_zone_create_or_update(self, resp):
         """Tell digaas to poll the nameservers to for a zone serial change
@@ -163,10 +167,10 @@ class DigaasBehaviors(object):
 
 
 def fetch_plot(client, start_time, end_time, output_filename):
-    print "fetching plot"
+    LOG.info("fetching plot")
     post_resp = client.post_stats_request(start_time, end_time)
     if not post_resp.ok:
-        print "ERROR fetching plot: {0}".format(post_resp)
+        LOG.error("error fetching plot: %s", post_resp)
         return
 
     id = post_resp.json()['id']
@@ -178,13 +182,14 @@ def fetch_plot(client, start_time, end_time, output_filename):
         gevent.sleep(1)
 
         resp = client.get_stats_request(id)
-        print resp
+        LOG.info(str(resp))
         if resp.ok:
-            print "stats request suceeded"
-            print resp.text
+            LOG.info("stats request suceeded")
+            LOG.info(str(resp.text))
             image_id = resp.json()['image_id']
-            print "image_id = %s" % image_id
+            LOG.info("image_id = %s", image_id)
             image_resp = client.get_image(image_id)
+            LOG.info("writing to file %s", output_filename)
             # save all images to the images directory
             output_path = os.path.join(persistence.images_dir, output_filename)
             output_path = os.path.abspath(output_path)
@@ -206,9 +211,9 @@ def persist_digaas_data(stats, digaas_client):
     """
     start_time = int(stats['start_time'])
     end_time = int(stats['last_request_timestamp'] + 1)
-    print start_time, end_time
+    LOG.info("start_time = %s, end_time = %s", start_time, end_time)
     plot_filename = "propagation_plot{0}.png".format(start_time)
-    print plot_filename
+    LOG.info("plot_filename = %s", plot_filename)
 
     gevent.spawn(fetch_plot, digaas_client, start_time, end_time, plot_filename)
 
@@ -218,7 +223,7 @@ def persist_digaas_data(stats, digaas_client):
 
 
 def setup_digaas_integration(digaas_client):
-    print "USING DIGaaS"
+    LOG.info("USING DIGaaS")
     # register our event handlers
     persistence.persisting_info += \
         lambda stats: persist_digaas_data(stats, digaas_client)

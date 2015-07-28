@@ -2,6 +2,7 @@ import csv
 import json
 import datetime
 import random
+import logging
 
 from locust import HttpLocust
 from locust import TaskSet
@@ -27,6 +28,8 @@ from tasks.gather import GatherTasks
 from tasks.recordset import RecordsetTasks
 from tasks.zone import ZoneTasks
 from models import Tenant
+
+LOG = logging.getLogger(__name__)
 
 # require a username + password to access the web interface
 setup_authentication(CONFIG.username, CONFIG.password)
@@ -251,12 +254,14 @@ class TaskSwitcher(TaskSet):
         locust.events.locust_start_hatching._handlers = []
 
         def on_hatch_complete(user_count):
-            if not GatherData.has_already_gathered():
-                locust.runners.locust_runner.stats.reset_all()
             GatherData.set_already_gathered(True)
             self.tasks = self.regular_tasks.tasks
-            self.interrupt()
         locust.events.hatch_complete += on_hatch_complete
+
+        def on_done_gathering():
+            locust.runners.locust_runner.stats.reset_all()
+            self.interrupt()
+        GatherShim.done_gathering += on_done_gathering
 
     def on_start(self):
         self.gathering_tasks.on_start()
@@ -270,10 +275,10 @@ class TaskSwitcher(TaskSet):
     def get_next_task(self):
         if self.need_to_gather():
             self.tasks = self.gathering_tasks.tasks
-            print "Using gathering tasks"
+            LOG.info("Using gathering tasks")
         else:
             self.tasks = self.regular_tasks.tasks
-            print "Using regular tasks"
+            LOG.info("Using regular tasks")
         next_task = super(TaskSwitcher, self).get_next_task()
         return next_task
 

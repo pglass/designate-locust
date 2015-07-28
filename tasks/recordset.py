@@ -1,4 +1,6 @@
+import datetime
 import json
+import logging
 import random
 
 from locust import TaskSet
@@ -10,6 +12,8 @@ import datagen
 from greenlet_manager import GreenletManager
 import accurate_config as CONFIG
 from models import Recordset
+
+LOG = logging.getLogger(__name__)
 
 
 class RecordsetTasks(BaseTaskSet):
@@ -47,7 +51,7 @@ class RecordsetTasks(BaseTaskSet):
         tenant = self.select_random_tenant()
         zone = tenant.data.select_zone_for_get()
         if zone is None:
-            print "WARNING: don't know of any zones to create records on"
+            LOG.warning("don't know of any zones to create records on")
             return
         headers = self.get_headers(tenant.id)
 
@@ -94,9 +98,9 @@ class RecordsetTasks(BaseTaskSet):
 
                 # add to the list of things for deleting, to help us not run
                 # out of zones to delete
-                print "{0} -- Added recordset {1}".format(tenant, recordset)
+                LOG.info("%s -- Added recordset %s", tenant, recordset)
                 tenant.data.recordsets_for_delete.append(recordset)
-                print "have %s records" % tenant.data.recordset_count()
+                LOG.info("have %s records", tenant.data.recordset_count())
 
     def modify_record(self):
         gevent.spawn(
@@ -110,7 +114,7 @@ class RecordsetTasks(BaseTaskSet):
         tenant = self.select_random_tenant()
         recordset = tenant.data.select_recordset_for_get()
         if not recordset:
-            print "modify_record: got None record_info"
+            LOG.warning("modify_record got None record_info")
             return
 
         headers = self.get_headers(tenant.id)
@@ -129,13 +133,12 @@ class RecordsetTasks(BaseTaskSet):
 
             if not put_resp.ok:
                 put_resp.failure("Failed with status code %s" % put_resp.status_code)
-                print "Failed udpate recordset response %s" % put_resp
-                print "%s %s" % (put_resp.request.method, put_resp.request.url)
-                print put_resp.request.body
-                print put_resp.request.headers
-                print
-                print put_resp.headers
-                print put_resp.text
+                LOG.error("Failed, update recordset response %s" % put_resp)
+                LOG.error("  %s %s", put_resp.request.method, put_resp.request.url)
+                LOG.error("  %s", put_resp.request.body)
+                LOG.error("  %s", put_resp.request.headers)
+                LOG.error("  %s", put_resp.headers)
+                LOG.error("  %s", put_resp.text)
                 return
 
             api_call = lambda: self.designate_client.get_recordset(
@@ -162,7 +165,7 @@ class RecordsetTasks(BaseTaskSet):
         tenant = self.select_random_tenant()
         recordset = tenant.data.pop_recordset_for_delete()
         if not recordset:
-            print "remove_record: got None record_info"
+            LOG.warning("remove_record got None record_info")
             return
         headers = self.get_headers(tenant.id)
 

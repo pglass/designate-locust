@@ -4,6 +4,7 @@ Does nothing unless setup_persistence() is called.
 Set stats_dir to a directory to use, before calling setup_persistence
 """
 import json
+import logging
 import os
 import sys
 import time
@@ -14,6 +15,7 @@ import locust.stats
 
 import insight
 
+LOG = logging.getLogger(__name__)
 
 def ensure_dir_exists(d):
     if not os.path.exists(d):
@@ -74,7 +76,7 @@ def save_stats_to_file(stats, timestamp):
     """Saves stats to a json file, so stats must be json-serializable. The
     filename is 'stats<timestamp>' and is placed in persistence.stats_dir."""
     stats_filepath = "{0}/stats{1}.json".format(stats_dir, timestamp)
-    print "Writing stats to file: {0}".format(os.path.abspath(stats_filepath))
+    LOG.info("Writing stats to file: {0}".format(os.path.abspath(stats_filepath)))
     with open(stats_filepath, 'w') as f:
         f.write(json.dumps(stats))
 
@@ -90,7 +92,7 @@ def store_max_users(previous, current):
     global max_users
     if previous == locust.runners.STATE_HATCHING:
         max_users = max(max_users, locust.runners.locust_runner.user_count)
-        print "Updated max_users: {0}".format(max_users)
+        LOG.debug("Updated max_users: {0}".format(max_users))
 
 def persists_stats(previous, current):
     """Event handler that saves stats to disk when the test is stopped."""
@@ -102,6 +104,6 @@ def persists_stats(previous, current):
 
 def setup_persistence():
     if not insight.is_slave():
-        print "Setting up persistence with directory {0}".format(stats_dir)
+        LOG.info("Setting up persistence with directory {0}".format(stats_dir))
         locust.events.state_changed += persists_stats
         locust.events.state_changed += store_max_users

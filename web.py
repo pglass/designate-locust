@@ -1,8 +1,9 @@
-import os
-import json
-import string
-import random
 import datetime
+import json
+import logging
+import os
+import random
+import string
 
 from locust import web
 import locust.runners
@@ -13,13 +14,16 @@ from flask.ext.httpauth import HTTPBasicAuth
 
 import persistence
 
+LOG = logging.getLogger(__name__)
+
+
 def setup_authentication(authorized_username, authorized_password):
     if not all((authorized_username, authorized_password)):
         # inform the user which parts we're missing
-        print ('WARNING: no authentication setup -- (username, password) = {0}'
-               .format(map(bool, (authorized_username, authorized_password))))
+        LOG.warning("no authentication setup -- (username, password) = %s",
+                    map(bool, (authorized_username, authorized_password)))
         return
-    print "Setting up authentication..."
+    LOG.info("Setting up authentication")
 
     auth = HTTPBasicAuth()
 

@@ -1,3 +1,5 @@
+import datetime
+import logging
 import json
 
 from locust import TaskSet
@@ -10,6 +12,8 @@ from datagen import *
 from greenlet_manager import GreenletManager
 import accurate_config as CONFIG
 
+LOG = logging.getLogger(__name__)
+
 
 class ZoneTasks(BaseTaskSet):
 
@@ -18,7 +22,7 @@ class ZoneTasks(BaseTaskSet):
         tenant = self.select_random_tenant()
         zone = tenant.data.select_zone_for_get()
         if not zone:
-            print "WARNING: %s has no zones for getting" % tenant
+            LOG.warning("%s has no zones for getting", tenant)
             return
         resp = self.designate_client.get_zone(
             zone.id,
@@ -30,7 +34,7 @@ class ZoneTasks(BaseTaskSet):
         tenant = self.select_random_tenant()
         zone = tenant.data.select_zone_for_get()
         if not zone:
-            print "WARNING: %s has no zones for getting" % tenant
+            LOG.warning("%s has no zones for getting", tenant)
             return
         # print "get_domain_by_name: %s, %s, %s" % (tenant, zone_id, zone_name)
         resp = self.designate_client.get_zone_by_name(
@@ -102,9 +106,9 @@ class ZoneTasks(BaseTaskSet):
             resp = api_call()
             if resp.ok and resp.json()['status'] == 'ACTIVE':
                 zone = Zone(resp.json()['id'], resp.json()['name'])
-                print "{0} -- Added zone {1}".format(tenant, zone)
+                LOG.info("%s -- Added zone %s", tenant, zone)
                 tenant.data.zones_for_get.append(zone)
-                print "have %s zones" % tenant.data.zone_count()
+                LOG.debug("have %s zones", tenant.data.zone_count())
 
     def import_zone(self):
         """POST /zones/tasks/import, Content-type: text/dns"""
@@ -213,7 +217,7 @@ class ZoneTasks(BaseTaskSet):
         tenant = self.select_random_tenant()
         zone = tenant.data.pop_zone_for_delete()
         if zone is None:
-            print "remove_domain: got None zone_info -- probably ran out of zones to delete"
+            LOG.warning("remove_domain got None zone_info")
             return
 
         headers = self.get_headers(tenant.id)

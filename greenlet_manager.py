@@ -1,5 +1,10 @@
 import time
+import logging
+
 import gevent
+
+LOG = logging.getLogger(__name__)
+
 
 class GreenletManager(list):
 
@@ -45,7 +50,7 @@ class GreenletManager(list):
     def cleanup_greenlets(self, timeout=None):
         """Allow the greenlets stored in this list timeout seconds to finish.
         After the timeout, kill the remaining greenlets."""
-        print "Cleaning up greenlets"
+        LOG.info("Cleaning up greenlets")
         if timeout:
             gevent.joinall(self, timeout=timeout)
         gevent.killall(self, exception=gevent.Timeout)
