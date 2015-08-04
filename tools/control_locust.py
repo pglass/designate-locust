@@ -26,6 +26,10 @@ def parse_args():
     # add the stop command
     stop_parser = subparsers.add_parser("stop", help="Stop load generation")
 
+    # add a get status command
+    get_status_parser = subparsers.add_parser("status",
+        help="Fetch the Locust's status")
+
     return p.parse_args()
 
 def start_locust(args):
@@ -36,6 +40,10 @@ def start_locust(args):
 
 def stop_locust(args):
     return requests.get(args.locust_endpoint.strip('/') + '/stop',
+                        auth=HTTPBasicAuth(args.username, args.password))
+
+def get_status(args):
+    return requests.get(args.locust_endpoint.strip('/') + '/status',
                         auth=HTTPBasicAuth(args.username, args.password))
 
 def handle_args(args):
@@ -53,10 +61,11 @@ def handle_args(args):
 
     if args.command == 'start':
         resp = start_locust(args)
-    if args.command == 'stop':
+    elif args.command == 'stop':
         resp = stop_locust(args)
+    elif args.command == 'status':
+        resp = get_status(args)
 
-    print resp
     print resp.text
 
     if not resp.ok:
