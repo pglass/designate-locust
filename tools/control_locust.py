@@ -1,4 +1,5 @@
 import sys
+from sys import stderr
 import argparse
 import getpass
 import requests
@@ -50,14 +51,13 @@ def handle_args(args):
     if not args.locust_endpoint.startswith('http'):
         old_endpoint = args.locust_endpoint
         args.locust_endpoint = "http://" + args.locust_endpoint
-        print("WARNING: Fixing locust endpoint '{0}' to be '{1}'"
-              .format(old_endpoint, args.locust_endpoint))
+        print >>stderr, ("WARNING: Fixing locust endpoint '{0}' to be '{1}'"
+                         .format(old_endpoint, args.locust_endpoint))
     if args.username and not args.password:
         args.password = getpass.getpass()
         if not args.password:
-            print "ERROR: Password required for user '{0}'".format(args.username)
+            print >>stderr, "ERROR: Password required for user '{0}'".format(args.username)
             sys.exit(1)
-
 
     if args.command == 'start':
         resp = start_locust(args)
