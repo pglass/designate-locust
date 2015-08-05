@@ -7,7 +7,6 @@ from locust import TaskSet
 import gevent
 
 from base import BaseTaskSet
-import client
 import datagen
 from greenlet_manager import GreenletManager
 import accurate_config as CONFIG
@@ -21,22 +20,26 @@ class RecordsetTasks(BaseTaskSet):
     def list_records(self):
         """GET /zones/{id}/recordsets"""
         tenant = self.select_random_tenant()
+        client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
-        headers = self.get_headers(tenant.id)
-        resp = self.designate_client.list_recordsets(
+        if not recordset:
+            LOG.error("%s has no zones for getting", tenant)
+            return
+        client.list_recordsets(
             recordset.zone.id,
-            name='/v2/zones/{id}/recordsets',
-            headers=headers)
+            name='/v2/zones/{id}/recordsets')
 
     def get_record(self):
         """GET /zones/{id}/recordsets/recordID"""
         tenant = self.select_random_tenant()
+        client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
-        headers = self.get_headers(tenant.id)
-        self.designate_client.get_recordset(
+        if not recordset:
+            LOG.error("%s has no zones for getting", tenant)
+            return
+        client.get_recordset(
             recordset.zone.id,
             recordset.id,
-            headers=headers,
             name='/v2/zone/{id}/recordsets/recordID')
 
     def create_record(self):
@@ -49,11 +52,11 @@ class RecordsetTasks(BaseTaskSet):
 
     def _do_create_record(self, interval):
         tenant = self.select_random_tenant()
+        client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if zone is None:
             LOG.warning("don't know of any zones to create records on")
             return
-        headers = self.get_headers(tenant.id)
 
         record_name = "{0}.{1}".format(datagen.randomize("record"), zone.name)
         payload = { "name" : record_name,
@@ -61,11 +64,10 @@ class RecordsetTasks(BaseTaskSet):
                     "ttl" : 3600,
                     "records" : [ datagen.random_ip() ] }
 
-        with self.designate_client.post_recordset(
+        with client.post_recordset(
                 zone.id,
                 data=json.dumps(payload),
                 name='/v2/zones/{id}/recordsets',
-                headers=headers,
                 catch_response=True) as post_resp:
 
             if CONFIG.use_digaas and post_resp.ok:
@@ -75,10 +77,9 @@ class RecordsetTasks(BaseTaskSet):
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
                 return
 
-            api_call = lambda: self.designate_client.get_recordset(
+            api_call = lambda: client.get_recordset(
                 zone_id=zone.id,
                 recordset_id=post_resp.json()['id'],
-                headers=headers,
                 name='/v2/zones/{id}/recordsets/{id} (POST status check)')
             self._poll_until_active_or_error(
                 api_call=api_call,
@@ -112,19 +113,18 @@ class RecordsetTasks(BaseTaskSet):
     def _do_modify_record(self, interval):
         """PATCH /zones/{id}/recordsets/{id}"""
         tenant = self.select_random_tenant()
+        client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
         if not recordset:
-            LOG.warning("modify_record got None record_info")
+            LOG.error("%s has no recordsets for updating", tenant)
             return
 
-        headers = self.get_headers(tenant.id)
         payload = { "records": [ datagen.random_ip() ],
                     "ttl": random.randint(2400, 7200) }
-        with self.designate_client.put_recordset(
+        with client.put_recordset(
                 recordset.zone.id,
                 recordset.id,
                 data=json.dumps(payload),
-                headers=headers,
                 name="/v2/zones/{id}/recordsets/{id}",
                 catch_response=True) as put_resp:
 
@@ -141,10 +141,9 @@ class RecordsetTasks(BaseTaskSet):
                 LOG.error("  %s", put_resp.text)
                 return
 
-            api_call = lambda: self.designate_client.get_recordset(
+            api_call = lambda: client.get_recordset(
                 zone_id=put_resp.json()['zone_id'],
                 recordset_id=put_resp.json()['id'],
-                headers=headers,
                 name='/v2/zones/{id}/recordsets/{id} (PUT status check)')
             self._poll_until_active_or_error(
                 api_call=api_call,
@@ -163,11 +162,11 @@ class RecordsetTasks(BaseTaskSet):
 
     def _do_remove_record(self, interval):
         tenant = self.select_random_tenant()
+        client = self.designate_client.as_user(tenant)
         recordset = tenant.data.pop_recordset_for_delete()
         if not recordset:
-            LOG.warning("remove_record got None record_info")
+            LOG.error("%s has no recordsets for updating", tenant)
             return
-        headers = self.get_headers(tenant.id)
 
         # digaas uses the start_time when computing the propagation
         # time to the nameserver. We're assuming this time is UTC.
@@ -179,11 +178,10 @@ class RecordsetTasks(BaseTaskSet):
         if CONFIG.use_digaas:
             start_time = datetime.datetime.now()
 
-        with self.designate_client.delete_recordset(
+        with client.delete_recordset(
                 recordset.zone.id,
                 recordset.id,
                 name='/v2/zones/{id}/recordsets/{id}',
-                headers=headers,
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
@@ -193,10 +191,9 @@ class RecordsetTasks(BaseTaskSet):
                 del_resp.failure("Failed with status_code %s" % del_resp.status_code)
                 return
 
-            api_call = lambda: self.designate_client.get_recordset(
+            api_call = lambda: client.get_recordset(
                 recordset.zone.id,
                 recordset.id,
-                headers=headers,
                 name='/v2/zones/{id}/recordsets/{id} (DELETE status check)',
                 catch_response=True)
 

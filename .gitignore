@@ -3,3 +3,4 @@
 *.sample
 saved_stats/*
 images/*
+accurate_config.py

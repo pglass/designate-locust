@@ -53,10 +53,11 @@ if CONFIG.use_digaas and not insight.is_slave():
     digaas_integration.setup_digaas_integration(_digaas_client)
 
 if not insight.is_master():
-    SMALL_TENANTS = [Tenant(id=id, api_key=None, type=Tenant.SMALL)
-                      for id in CONFIG.small_tenants]
-    LARGE_TENANTS = [Tenant(id=id, api_key=None, type=Tenant.LARGE)
-                     for id in CONFIG.large_tenants]
+    # TODO: the tenant id is actually the username. it should be named so.
+    SMALL_TENANTS = [Tenant(id=id, api_key=api_key, type=Tenant.SMALL)
+                      for id, api_key in CONFIG.small_tenants]
+    LARGE_TENANTS = [Tenant(id=id, api_key=api_key, type=Tenant.LARGE)
+                     for id, api_key in CONFIG.large_tenants]
     ALL_TENANTS = SMALL_TENANTS + LARGE_TENANTS
 
     # the greenlet_manager keeps track of greenlets spawned for polling

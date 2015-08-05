@@ -21,10 +21,5 @@ class BaseTaskSet(TaskSet):
             self.digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
             self.digaas_behaviors = digaas_integration.DigaasBehaviors(self.digaas_client, CONFIG)
 
-    def get_headers(self, tenant=None):
-        return {
-            client.ROLE_HEADER: 'admin',
-            client.PROJECT_ID_HEADER: tenant }
-
     def select_random_tenant(self):
         return select_random_item(self.tenant_list)

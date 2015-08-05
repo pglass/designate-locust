@@ -1,7 +1,12 @@
+import logging
+
 from locust import TaskSet
 
 PROJECT_ID_HEADER = 'X-Auth-Project-ID'
 ROLE_HEADER = 'X-Roles'
+
+LOG = logging.getLogger(__name__)
+
 
 class DesignateClient(object):
     """Extends a normal client with Designate specific http requests."""
@@ -11,14 +16,21 @@ class DesignateClient(object):
         "Accept": "application/json",
     }
 
-    def __init__(self, client):
+    def __init__(self, client, tenant=None):
         self.client = client
+        self.tenant = tenant
 
-    @classmethod
-    def _prepare_headers(cls, kwargs):
+    def as_user(self, tenant):
+        return DesignateClient(self.client, tenant)
+
+    def _prepare_headers(self, kwargs):
         """Ensures there are Content-Type and Accept headers,
         and that the headers are in the kwargs."""
-        new_headers = dict(cls._HEADERS)
+        new_headers = dict(self._HEADERS)
+        if self.tenant:
+            new_headers['X-Auth-Project-ID'] = self.tenant.id
+        if self.tenant and self.tenant.api_key:
+            new_headers['X-Auth-Token'] = self.tenant.get_token()
         new_headers.update(kwargs.get('headers') or {})
         kwargs['headers'] = new_headers
 
@@ -81,8 +93,8 @@ class DesignateClient(object):
         return self.client.get(url, *args, **kwargs)
 
     def export_zone(self, zone_id, *args, **kwargs):
-        kwargs['headers']['Accept'] = 'text/dns'
         self._prepare_headers(kwargs)
+        kwargs['headers']['Accept'] = 'text/dns'
         url = "/admin/zones/export/{0}".format(zone_id)
         return self.client.get(url, *args, **kwargs)
 
@@ -113,6 +125,14 @@ class DesignateClient(object):
         self._prepare_headers(kwargs)
         url = "/v2/zones/{0}/recordsets/{1}".format(zone_id, recordset_id)
         return self.client.delete(url, *args, **kwargs)
+
+    #############################################
+    # Proxy methods for raw http requests
+    #############################################
+    def get(self, *args, **kwargs):
+        self._prepare_headers(kwargs)
+        return self.client.get(*args, **kwargs)
+
 
 
 if __name__ == '__main__':

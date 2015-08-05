@@ -5,6 +5,7 @@ password = None
 reset_stats = False
 
 designate_host = 'http://192.168.33.20:9001'
+auth_endpoint = 'https://192.168.33.20:5000'
 
 use_digaas = False
 digaas_endpoint = 'http://localhost:9090'
@@ -20,8 +21,16 @@ graphite_port = None
 min_wait = 100
 max_wait = 1000
 
-large_tenants = ['T1', 'T2']
-small_tenants = ['T3', 'T4']
+# each entry in these tenant lists is (username, api_key)
+# if the api_key is set to None, the test will run in noauth mode
+large_tenants = [
+    ('dnspftest1', None),
+    ('dnspftest2', None),
+]
+small_tenants = [
+    ('dnspftest3', None),
+    ('dnspftest4', None),
+]
 assert not set(large_tenants).intersection(set(small_tenants))
 
 class Weights(object):
@@ -79,27 +88,3 @@ small_weights = Weights(
 
 )
 total_small_weight = small_weights.total()
-
-print total_large_weight
-print total_small_weight
-
-# n_large_domains_per_tenant is the number of domains to fetch for use with
-# gets/deletes for large tenants during the test. Due to the implementation,
-# these domains are divided equally, three ways:
-#   1/3 used for getting domains
-#   1/3 used for deleting domains
-#   1/3 used for fetching records
-# n_large_records_per_domain is the number of records to fetch for each of the
-# 1/3 domains retrieved above, of which:
-#   1/2 used for getting records (all NS records)
-#   1/4 used for updating records (all A records)
-#   1/4 used for deleting records (all A records)
-# So the total number of records available for deletion during the test, among
-# all large tenants is:
-#   n_large_domains_per_tenant * 1/3 * n_large_domains_per_tenant * 1/4
-#
-# These numbers should have no effect on the rates seen during the test.
-n_large_domains_per_tenant = 120
-n_large_records_per_domain = 1
-n_small_domains_per_tenant = 60
-n_small_records_per_domain = 1

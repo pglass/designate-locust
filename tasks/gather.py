@@ -93,8 +93,8 @@ class GatherTasks(BaseTaskSet):
             return
         link = self._get_path_from_full_url(link)
 
-        headers = {'X-Auth-Project-ID': tenant.id}
-        resp = self.client.get(link, headers=headers, name='/v2/zones')
+        client = self.designate_client.as_user(tenant)
+        resp = client.get(link, name='/v2/zones')
         zones = resp.json()['zones']
         links = resp.json()['links']
         LOG.info("%s -- fetched %s zones for tenant %s",
@@ -126,8 +126,8 @@ class GatherTasks(BaseTaskSet):
             return
         link = self._get_path_from_full_url(link)
 
-        headers = {'X-Auth-Project-ID': tenant.id}
-        resp = self.client.get(link, headers=headers, name='/v2/zones/{id}/recordsets')
+        client = self.designate_client.as_user(tenant)
+        resp = client.get(link, name='/v2/zones/{id}/recordsets')
         recordsets = resp.json()['recordsets']
         links = resp.json()['links']
 
