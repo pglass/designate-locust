@@ -58,7 +58,7 @@ class ZoneTasks(BaseTaskSet):
         """POST /zones"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_create_domain(interval=0.5),
+            lambda: self._do_create_domain(interval=2),
             timeout=60
         )
 
