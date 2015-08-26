@@ -12,6 +12,9 @@ LOG = logging.getLogger(__name__)
 
 graphite_queue = Queue()
 
+def _escape_metric_name(name):
+    """Graphite does not allow spaces or slashes"""
+    return name.replace(' ', '_').replace('/', '-')
 
 def graphite_worker(host, port):
     """The worker pops each item off the queue and sends it to graphite."""
@@ -20,6 +23,7 @@ def graphite_worker(host, port):
         sock.connect((host, port))
     except Exception as e:
         LOG.error("Failed to connect to Graphite at {0}:{1}".format(host, port))
+        LOG.error("{0}".format(e))
         return
 
     LOG.info("Connected to graphite at {0}:{1}".format(host, port))
@@ -40,6 +44,7 @@ def _get_requests_per_second_graphite_message(stat, client_id):
 
 def _get_response_time_graphite_message(stat, client_id):
     request = stat['method'] + stat['name'].replace('/', '-')
+    request = _escape_metric_name(request)
 
     graphite_key = "locust.{0}.response_time.{1}".format(request, client_id)
     epoch_time = int(stat['start_time'])

@@ -18,7 +18,7 @@ LOG = logging.getLogger(__name__)
 class RecordsetTasks(BaseTaskSet):
 
     def list_records(self):
-        """GET /zones/{id}/recordsets"""
+        """GET /zones/ID/recordsets"""
         tenant = self.select_random_tenant()
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
@@ -27,10 +27,10 @@ class RecordsetTasks(BaseTaskSet):
             return
         client.list_recordsets(
             recordset.zone.id,
-            name='/v2/zones/{id}/recordsets')
+            name='/v2/zones/ID/recordsets')
 
     def get_record(self):
-        """GET /zones/{id}/recordsets/recordID"""
+        """GET /zones/ID/recordsets/ID"""
         tenant = self.select_random_tenant()
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
@@ -40,10 +40,10 @@ class RecordsetTasks(BaseTaskSet):
         client.get_recordset(
             recordset.zone.id,
             recordset.id,
-            name='/v2/zone/{id}/recordsets/recordID')
+            name='/v2/zone/ID/recordsets/ID')
 
     def create_record(self):
-        """POST /zones/{id}/recordsets"""
+        """POST /zones/ID/recordsets"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
             lambda: self._do_create_record(interval=2),
@@ -67,7 +67,7 @@ class RecordsetTasks(BaseTaskSet):
         with client.post_recordset(
                 zone.id,
                 data=json.dumps(payload),
-                name='/v2/zones/{id}/recordsets',
+                name='/v2/zones/ID/recordsets',
                 catch_response=True) as post_resp:
 
             if CONFIG.use_digaas and post_resp.ok:
@@ -80,7 +80,7 @@ class RecordsetTasks(BaseTaskSet):
             api_call = lambda: client.get_recordset(
                 zone_id=zone.id,
                 recordset_id=post_resp.json()['id'],
-                name='/v2/zones/{id}/recordsets/{id} (POST status check)')
+                name='/v2/zones/ID/recordsets/ID - POST status check')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
@@ -111,7 +111,7 @@ class RecordsetTasks(BaseTaskSet):
         )
 
     def _do_modify_record(self, interval):
-        """PATCH /zones/{id}/recordsets/{id}"""
+        """PATCH /zones/ID/recordsets/ID"""
         tenant = self.select_random_tenant()
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
@@ -125,7 +125,7 @@ class RecordsetTasks(BaseTaskSet):
                 recordset.zone.id,
                 recordset.id,
                 data=json.dumps(payload),
-                name="/v2/zones/{id}/recordsets/{id}",
+                name="/v2/zones/ID/recordsets/ID",
                 catch_response=True) as put_resp:
 
             if CONFIG.use_digaas and put_resp.ok:
@@ -144,7 +144,7 @@ class RecordsetTasks(BaseTaskSet):
             api_call = lambda: client.get_recordset(
                 zone_id=put_resp.json()['zone_id'],
                 recordset_id=put_resp.json()['id'],
-                name='/v2/zones/{id}/recordsets/{id} (PUT status check)')
+                name='/v2/zones/ID/recordsets/ID - PUT status check')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
@@ -153,7 +153,7 @@ class RecordsetTasks(BaseTaskSet):
                 failure_function=put_resp.failure)
 
     def remove_record(self):
-        """DELETE /zones/{id}/recordsets/{id}"""
+        """DELETE /zones/ID/recordsets/ID"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
             lambda: self._do_remove_record(interval=2),
@@ -181,7 +181,7 @@ class RecordsetTasks(BaseTaskSet):
         with client.delete_recordset(
                 recordset.zone.id,
                 recordset.id,
-                name='/v2/zones/{id}/recordsets/{id}',
+                name='/v2/zones/ID/recordsets/ID',
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
@@ -194,7 +194,7 @@ class RecordsetTasks(BaseTaskSet):
             api_call = lambda: client.get_recordset(
                 recordset.zone.id,
                 recordset.id,
-                name='/v2/zones/{id}/recordsets/{id} (DELETE status check)',
+                name='/v2/zones/ID/recordsets/ID - DELETE status check',
                 catch_response=True)
 
             self._poll_until_404(

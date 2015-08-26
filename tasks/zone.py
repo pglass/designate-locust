@@ -17,14 +17,14 @@ LOG = logging.getLogger(__name__)
 class ZoneTasks(BaseTaskSet):
 
     def get_domain_by_id(self):
-        """GET /zones/{id}"""
+        """GET /zones/ID"""
         tenant = self.select_random_tenant()
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if not zone:
             LOG.error("%s has no zones for getting", tenant)
             return
-        resp = client.get_zone(zone.id, name='/v2/zones/{id}')
+        resp = client.get_zone(zone.id, name='/v2/zones/ID')
 
     def get_domain_by_name(self):
         """GET /zones?name=<name>"""
@@ -36,7 +36,7 @@ class ZoneTasks(BaseTaskSet):
             return
         resp = client.get_zone_by_name(
             zone_name=zone.name,
-            name='/v2/zones/{id}?name=zoneNAME')
+            name='/v2/zones/ID?name=zoneNAME')
 
     def list_domains(self):
         """GET /zones"""
@@ -45,14 +45,14 @@ class ZoneTasks(BaseTaskSet):
         client.list_zones(name='/v2/zones')
 
     def export_domain(self):
-        """GET /zone/{id}, Accept: text/dns"""
+        """GET /zone/ID, Accept: text/dns"""
         tenant = self.select_random_tenant()
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if not zone:
             LOG.error("%s has no zones for getting", tenant)
             return
-        resp = client.export_zone(zone.id, name='/v2/zones/{id} (export)')
+        resp = client.export_zone(zone.id, name='/v2/zones/ID - export')
 
     def create_domain(self):
         """POST /zones"""
@@ -85,7 +85,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone_id=post_resp.json()['id'],
-                name='/v2/zones (status of POST /v2/zones)')
+                name='/v2/zones - status of POST /v2/zones'
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
@@ -133,7 +133,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone_import(
                 import_id=import_resp.json()['id'],
-                name='/v2/zones (status of POST /v2/zones/tasks/imports)')
+                name='/v2/zones - status of POST /v2/zones/tasks/imports')
 
             self._poll_until_active_or_error(
                 api_call=api_call,
@@ -144,7 +144,7 @@ class ZoneTasks(BaseTaskSet):
                 expected='COMPLETE')
 
     def modify_domain(self):
-        """PATCH /zones/{id}"""
+        """PATCH /zones/ID"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
             lambda: self._do_modify_domain(interval=2),
@@ -164,7 +164,7 @@ class ZoneTasks(BaseTaskSet):
         with client.patch_zone(
                 zone.id,
                 data=json.dumps(payload),
-                name='/v2/zones/{id}',
+                name='/v2/zones/ID',
                 catch_response=True) as patch_resp:
 
             if CONFIG.use_digaas and patch_resp.ok:
@@ -176,7 +176,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone_id=zone.id,
-                name='/v2/zones (status of PATCH /v2/zones/{id})')
+                name='/v2/zones - status of PATCH /v2/zones/ID')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
@@ -201,7 +201,7 @@ class ZoneTasks(BaseTaskSet):
             gevent.sleep(interval)
 
     def remove_domain(self):
-        """DELETE /zones/{id}"""
+        """DELETE /zones/ID"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
             lambda: self._do_remove_domain(interval=2),
@@ -228,7 +228,7 @@ class ZoneTasks(BaseTaskSet):
 
         with client.delete_zone(
                 zone.id,
-                name='/v2/zones/{id}',
+                name='/v2/zones/ID',
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
@@ -236,7 +236,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone.id, catch_response=True,
-                name='/v2/zones (status of DELETE /v2/zones/{id})')
+                name='/v2/zones - status of DELETE /v2/zones/ID')
             self._poll_until_404(api_call, interval,
                 success_function=del_resp.success,
                 failure_function=del_resp.failure)
