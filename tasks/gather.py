@@ -127,7 +127,7 @@ class GatherTasks(BaseTaskSet):
         link = self._get_path_from_full_url(link)
 
         client = self.designate_client.as_user(tenant)
-        resp = client.get(link, name='/v2/zones/{id}/recordsets')
+        resp = client.get(link, name='/v2/zones/ID/recordsets')
         recordsets = resp.json()['recordsets']
         links = resp.json()['links']
 

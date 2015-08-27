@@ -85,7 +85,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone_id=post_resp.json()['id'],
-                name='/v2/zones - status of POST /v2/zones'
+                name='/v2/zones - status of POST /v2/zones')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
