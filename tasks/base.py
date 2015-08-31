@@ -1,3 +1,4 @@
+import time
 from collections import namedtuple
 
 from locust import TaskSet
@@ -25,9 +26,9 @@ class BaseTaskSet(TaskSet):
     def select_random_tenant(self):
         return select_random_item(self.tenant_list)
 
-    def _poll_until_active_or_error(self, api_call, interval, status_function,
-                                    success_function, failure_function,
-                                    expected='ACTIVE'):
+    def _poll_until_active_or_error(self, api_call, interval,
+                                    status_function, success_function,
+                                    failure_function, expected='ACTIVE'):
         # NOTE: this is assumed to be run in a separate greenlet. We use
         # `while True` here, and use gevent to manage a timeout externally
         while True:
@@ -43,8 +44,7 @@ class BaseTaskSet(TaskSet):
     def _poll_until_404(self, api_call, interval, success_function,
                         failure_function):
         # NOTE: this is assumed to be run in a separate greenlet. We use
-        # `while True` here, and use gevent to manage a timeout or to kill
-        # the greenlet externally.
+        # `while True` here, and use gevent to manage a timeout externally
         while True:
             with api_call() as resp:
                 if resp.status_code == 404:
@@ -54,3 +54,8 @@ class BaseTaskSet(TaskSet):
                     success_function()
                     return
             gevent.sleep(interval)
+
+    def async_success(self, start_time, resp_obj):
+        response_time = int((time.time() - start_time) * 1000)
+        resp_obj.locust_request_meta['response_time'] = response_time
+        resp_obj.success()

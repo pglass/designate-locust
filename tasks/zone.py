@@ -1,6 +1,7 @@
 import datetime
 import logging
 import json
+import time
 
 from locust import TaskSet
 import gevent
@@ -72,6 +73,7 @@ class ZoneTasks(BaseTaskSet):
 
         # the with block lets us specify when the request has succeeded.
         # this lets us time how long until an active or error status.
+        start_time = time.time()
         with client.post_zone(data=json.dumps(payload),
                               name='/v2/zones',
                               catch_response=True) as post_resp:
@@ -86,11 +88,12 @@ class ZoneTasks(BaseTaskSet):
             api_call = lambda: client.get_zone(
                 zone_id=post_resp.json()['id'],
                 name='/v2/zones/ID - status check')
+
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
                 status_function=lambda r: r.json()['status'],
-                success_function=post_resp.success,
+                success_function=lambda: self.async_success(start_time, post_resp),
                 failure_function=post_resp.failure)
 
             # if we successfully created the zone, add it to our list
@@ -113,6 +116,7 @@ class ZoneTasks(BaseTaskSet):
         tenant = self.select_random_tenant()
         client = self.designate_client.as_user(tenant)
         zone_file = random_zone_file()
+        start_time = time.time()
         with client.import_zone(data=zone_file,
                                 name='/v2/zones/tasks/imports',
                                 catch_response=True) as import_resp:
@@ -139,7 +143,7 @@ class ZoneTasks(BaseTaskSet):
                 api_call=api_call,
                 interval=interval,
                 status_function=lambda r: r.json()['status'],
-                success_function=import_resp.success,
+                success_function=lambda: self.async_success(start_time, import_resp),
                 failure_function=import_resp.failure,
                 expected='COMPLETE')
 
@@ -161,6 +165,7 @@ class ZoneTasks(BaseTaskSet):
         payload = { "name": zone.name,
                     "email": ("update@" + zone.name).strip('.'),
                     "ttl": random.randint(2400, 7200) }
+        start_time = time.time()
         with client.patch_zone(
                 zone.id,
                 data=json.dumps(payload),
@@ -181,7 +186,7 @@ class ZoneTasks(BaseTaskSet):
                 api_call=api_call,
                 interval=interval,
                 status_function=lambda r: r.json()['status'],
-                success_function=patch_resp.success,
+                success_function=lambda: self.async_success(start_time, patch_resp),
                 failure_function=patch_resp.failure)
 
     def remove_domain(self):
@@ -210,6 +215,7 @@ class ZoneTasks(BaseTaskSet):
         if CONFIG.use_digaas:
             start_time = datetime.datetime.now()
 
+        start_time = time.time()
         with client.delete_zone(
                 zone.id,
                 name='/v2/zones/ID',
@@ -222,5 +228,5 @@ class ZoneTasks(BaseTaskSet):
                 zone.id, catch_response=True,
                 name='/v2/zones/ID - status check')
             self._poll_until_404(api_call, interval,
-                success_function=del_resp.success,
+                success_function=lambda: self.async_success(start_time, del_resp),
                 failure_function=del_resp.failure)

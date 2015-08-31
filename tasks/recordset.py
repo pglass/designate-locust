@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import random
+import time
 
 from locust import TaskSet
 import gevent
@@ -64,6 +65,7 @@ class RecordsetTasks(BaseTaskSet):
                     "ttl" : 3600,
                     "records" : [ datagen.random_ip() ] }
 
+        start_time = time.time()
         with client.post_recordset(
                 zone.id,
                 data=json.dumps(payload),
@@ -85,7 +87,7 @@ class RecordsetTasks(BaseTaskSet):
                 api_call=api_call,
                 interval=interval,
                 status_function=lambda r: r.json()['status'],
-                success_function=post_resp.success,
+                success_function=lambda: self.async_success(start_time, post_resp),
                 failure_function=post_resp.failure)
 
             # if we successfully created the recordset, add it to our list
@@ -121,6 +123,7 @@ class RecordsetTasks(BaseTaskSet):
 
         payload = { "records": [ datagen.random_ip() ],
                     "ttl": random.randint(2400, 7200) }
+        start_time = time.time()
         with client.put_recordset(
                 recordset.zone.id,
                 recordset.id,
@@ -149,7 +152,7 @@ class RecordsetTasks(BaseTaskSet):
                 api_call=api_call,
                 interval=interval,
                 status_function=lambda r: r.json()['status'],
-                success_function=put_resp.success,
+                success_function=lambda: self.async_success(start_time, put_resp),
                 failure_function=put_resp.failure)
 
     def remove_record(self):
@@ -175,14 +178,15 @@ class RecordsetTasks(BaseTaskSet):
         #
         # IMPORTANT: your locust box must be synchronized to network time,
         # along with your digaas box, or digaas will compute bad durations
-        if CONFIG.use_digaas:
-            start_time = datetime.datetime.now()
+        start_time = datetime.datetime.now()
+        start_time_seconds = time.time()
 
         with client.delete_recordset(
                 recordset.zone.id,
                 recordset.id,
                 name='/v2/zones/ID/recordsets/ID',
                 catch_response=True) as del_resp:
+            print 'DELETED recordset %s' % recordset.id
 
             if CONFIG.use_digaas and del_resp.ok:
                 self.digaas_behaviors.check_name_removed(recordset.zone.name, start_time)
@@ -200,5 +204,5 @@ class RecordsetTasks(BaseTaskSet):
             self._poll_until_404(
                 api_call=api_call,
                 interval=interval,
-                success_function=del_resp.success,
+                success_function=lambda: self.async_success(start_time_seconds, del_resp),
                 failure_function=del_resp.failure)
