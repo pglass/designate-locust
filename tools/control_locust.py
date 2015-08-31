@@ -51,8 +51,8 @@ def handle_args(args):
     if not args.locust_endpoint.startswith('http'):
         old_endpoint = args.locust_endpoint
         args.locust_endpoint = "http://" + args.locust_endpoint
-        print >>stderr, ("WARNING: Fixing locust endpoint '{0}' to be '{1}'"
-                         .format(old_endpoint, args.locust_endpoint))
+        #print >>stderr, ("WARNING: Fixing locust endpoint '{0}' to be '{1}'"
+        #                 .format(old_endpoint, args.locust_endpoint))
     if args.username and not args.password:
         args.password = getpass.getpass()
         if not args.password:
