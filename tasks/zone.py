@@ -85,7 +85,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone_id=post_resp.json()['id'],
-                name='/v2/zones - status of POST /v2/zones')
+                name='/v2/zones/ID - status check')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
@@ -133,7 +133,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone_import(
                 import_id=import_resp.json()['id'],
-                name='/v2/zones - status of POST /v2/zones/tasks/imports')
+                name='/v2/zones/ID - status check')
 
             self._poll_until_active_or_error(
                 api_call=api_call,
@@ -176,29 +176,13 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone_id=zone.id,
-                name='/v2/zones - status of PATCH /v2/zones/ID')
+                name='/v2/zones/ID - status check')
             self._poll_until_active_or_error(
                 api_call=api_call,
                 interval=interval,
                 status_function=lambda r: r.json()['status'],
                 success_function=patch_resp.success,
                 failure_function=patch_resp.failure)
-
-    def _poll_until_active_or_error(self, api_call, interval, status_function,
-                                    success_function, failure_function,
-                                    expected='ACTIVE'):
-        # NOTE: this is assumed to be run in a separate greenlet. We use
-        # `while True` here, and use gevent to manage a timeout or to kill
-        # the greenlet externally.
-        while True:
-            resp = api_call()
-            if resp.ok and status_function(resp) == expected:
-                success_function()
-                break
-            elif resp.ok and status_function(resp) == 'ERROR':
-                failure_function("Failed - saw ERROR status")
-                break
-            gevent.sleep(interval)
 
     def remove_domain(self):
         """DELETE /zones/ID"""
@@ -236,22 +220,7 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone.id, catch_response=True,
-                name='/v2/zones - status of DELETE /v2/zones/ID')
+                name='/v2/zones/ID - status check')
             self._poll_until_404(api_call, interval,
                 success_function=del_resp.success,
                 failure_function=del_resp.failure)
-
-    def _poll_until_404(self, api_call, interval, success_function,
-                        failure_function):
-        # NOTE: this is assumed to be run in a separate greenlet. We use
-        # `while True` here, and use gevent to manage a timeout or to kill
-        # the greenlet externally.
-        while True:
-            with api_call() as resp:
-                if resp.status_code == 404:
-                    # ensure the 404 isn't marked as a failure in the report
-                    resp.success()
-                    # mark the original (delete) request as a success
-                    success_function()
-                    return
-            gevent.sleep(interval)
