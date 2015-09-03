@@ -16,9 +16,10 @@ class DesignateClient(object):
         "Accept": "application/json",
     }
 
-    def __init__(self, client, tenant=None):
+    def __init__(self, client, tenant=None, use_project_id=False):
         self.client = client
         self.tenant = tenant
+        self.use_project_id = use_project_id
 
     def as_user(self, tenant):
         return DesignateClient(self.client, tenant)
@@ -27,7 +28,7 @@ class DesignateClient(object):
         """Ensures there are Content-Type and Accept headers,
         and that the headers are in the kwargs."""
         new_headers = dict(self._HEADERS)
-        if self.tenant:
+        if self.tenant and self.use_project_id:
             new_headers['X-Auth-Project-ID'] = self.tenant.id
         if self.tenant and self.tenant.api_key:
             new_headers['X-Auth-Token'] = self.tenant.get_token()
@@ -133,6 +134,13 @@ class DesignateClient(object):
         self._prepare_headers(kwargs)
         return self.client.get(*args, **kwargs)
 
+
+    #############################################
+    # reports
+    #############################################
+    def counts(self, *args, **kwargs):
+        self._prepare_headers(kwargs)
+        return self.client.get('/admin/reports/counts', *args, **kwargs)
 
 
 if __name__ == '__main__':

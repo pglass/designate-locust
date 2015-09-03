@@ -116,52 +116,6 @@ class SmallTasks(ZoneTasks, RecordsetTasks):
         super(SmallTasks, self).__init__(SMALL_TENANTS, *args, **kwargs)
         self.designate_client = DesignateClient(self.client)
 
-#class HatchingLargeTaskSet(ZoneTasks, RecordsetTasks):
-#
-#    tasks = {
-#        ZoneTasks.get_domain_by_id:   0,
-#        ZoneTasks.get_domain_by_name: 0,
-#        ZoneTasks.list_domains:       0,
-#        ZoneTasks.import_zone:        0,
-#        ZoneTasks.export_domain:      0,
-#        ZoneTasks.create_domain:      10,
-#        ZoneTasks.modify_domain:      0,
-#        ZoneTasks.remove_domain:      0,
-#        RecordsetTasks.list_records:  0,
-#        RecordsetTasks.get_record:    0,
-#        RecordsetTasks.create_record: 10,
-#        RecordsetTasks.remove_record: 0,
-#        RecordsetTasks.modify_record: 0,
-#    }
-#
-#    def __init__(self, *args, **kwargs):
-#        super(HatchingLargeTaskSet, self).__init__(LARGE_DATA, *args, **kwargs)
-#        self.designate_client = DesignateClient(self.client)
-
-
-class HatchingSmallTaskSet(ZoneTasks, RecordsetTasks):
-
-    tasks = {
-        ZoneTasks.get_domain_by_id:   0,
-        ZoneTasks.get_domain_by_name: 0,
-        ZoneTasks.list_domains:       0,
-        ZoneTasks.import_zone:        0,
-        ZoneTasks.export_domain:      0,
-        ZoneTasks.create_domain:      10,
-        ZoneTasks.modify_domain:      0,
-        ZoneTasks.remove_domain:      0,
-        RecordsetTasks.list_records:  0,
-        RecordsetTasks.get_record:    0,
-        RecordsetTasks.create_record: 10,
-        RecordsetTasks.remove_record: 0,
-        RecordsetTasks.modify_record: 0,
-    }
-
-    def __init__(self, *args, **kwargs):
-        super(HatchingSmallTaskSet, self).__init__(SMALL_TENANTS, *args, **kwargs)
-        self.designate_client = DesignateClient(self.client)
-
-
 class AccurateTaskSet(TaskSet):
     """Combines large tenants and small tenants with appropriate weights."""
     tasks = {

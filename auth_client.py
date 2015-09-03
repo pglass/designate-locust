@@ -17,7 +17,6 @@ class AuthClient(object):
             self.endpoint = endpoint
         else:
             self.endpoint = CONFIG.auth_endpoint.strip('/')
-        print self.endpoint
 
     def get_token(self, username, api_key):
         url = "{0}/tokens".format(self.endpoint)

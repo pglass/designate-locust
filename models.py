@@ -16,11 +16,13 @@ class Tenant(object):
     SMALL = 'small'
     LARGE = 'large'
 
-    def __init__(self, id, api_key, type):
+    def __init__(self, id, api_key, type, auth_endpoint=None):
         self.id = id
         self.api_key = api_key
         self.type = type
         self.data = TenantData()
+
+        self.auth_endpoint = auth_endpoint
 
         self._token = None
         self._expiry= None
@@ -35,10 +37,10 @@ class Tenant(object):
 
         This makes sure the token we have is good for (roughly) 24 hours.
         """
-        auth_client = AuthClient()
+        auth_client = AuthClient(self.auth_endpoint)
 
         if self._token:
-            revoke_resp = auth_client.revoke_token(token)
+            revoke_resp = auth_client.revoke_token(self._token)
 
         auth_resp = auth_client.get_token(self.id, self.api_key)
         if auth_resp.ok:
