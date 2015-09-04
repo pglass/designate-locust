@@ -95,6 +95,10 @@ class GatherTasks(BaseTaskSet):
 
         client = self.designate_client.as_user(tenant)
         resp = client.get(link, name='/v2/zones')
+        if not resp.ok:
+            LOG.error("failed to list zones while gathering zones")
+            return
+
         zones = resp.json()['zones']
         links = resp.json()['links']
         LOG.info("%s -- fetched %s zones for tenant %s",
@@ -128,6 +132,10 @@ class GatherTasks(BaseTaskSet):
 
         client = self.designate_client.as_user(tenant)
         resp = client.get(link, name='/v2/zones/ID/recordsets')
+        if not resp.ok:
+            LOG.error("failed to list recordsets while gathering recordsets")
+            return
+
         recordsets = resp.json()['recordsets']
         links = resp.json()['links']
 

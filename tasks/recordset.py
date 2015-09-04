@@ -71,6 +71,7 @@ class RecordsetTasks(BaseTaskSet):
                 data=json.dumps(payload),
                 name='/v2/zones/ID/recordsets',
                 catch_response=True) as post_resp:
+            client._log_if_bad_request(post_resp)
 
             if CONFIG.use_digaas and post_resp.ok:
                 self.digaas_behaviors.check_record_create_or_update(post_resp)
@@ -199,7 +200,8 @@ class RecordsetTasks(BaseTaskSet):
                 recordset.zone.id,
                 recordset.id,
                 name='/v2/zones/ID/recordsets/ID - status check',
-                catch_response=True)
+                catch_response=True,
+                no_log_request=True)
 
             self._poll_until_404(
                 api_call=api_call,

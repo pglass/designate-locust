@@ -226,7 +226,8 @@ class ZoneTasks(BaseTaskSet):
 
             api_call = lambda: client.get_zone(
                 zone.id, catch_response=True,
-                name='/v2/zones/ID - status check')
+                name='/v2/zones/ID - status check',
+                no_log_request=True)
             self._poll_until_404(api_call, interval,
                 success_function=lambda: self.async_success(start_time, del_resp),
                 failure_function=del_resp.failure)
