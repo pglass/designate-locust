@@ -31,6 +31,11 @@ def parse_args():
     get_status_parser = subparsers.add_parser("status",
         help="Fetch the Locust's status")
 
+    wait_for_status_parser = subparsers.add_parser("wait_for_status",
+        help="Wait for a specific status")
+    wait_for_status_parser.add_argument("status",
+        help="The status to wait for")
+
     return p.parse_args()
 
 def credentials(args):
@@ -52,6 +57,19 @@ def get_status(args):
     return requests.get(args.locust_endpoint.strip('/') + '/status',
                         auth=credentials(args))
 
+def wait_for_status(args):
+    expected_status = args.status
+    print "Waiting for status %r" % expected_status
+    while True:
+        resp = get_status(args)
+        if not resp.ok:
+            print "Failed to get Locust's status"
+            return resp
+
+        current_status = resp.json()['status'].lower()
+        if current_status == expected_status:
+            return resp
+
 def handle_args(args):
     if not args.locust_endpoint.startswith('http'):
         old_endpoint = args.locust_endpoint
@@ -63,6 +81,8 @@ def handle_args(args):
         resp = stop_locust(args)
     elif args.command == 'status':
         resp = get_status(args)
+    elif args.command == 'wait_for_status':
+        resp = wait_for_status(args)
 
     print resp.text
 
