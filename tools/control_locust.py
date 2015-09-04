@@ -1,7 +1,7 @@
 import sys
+import os
 from sys import stderr
 import argparse
-import getpass
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -9,10 +9,10 @@ def parse_args():
     p = argparse.ArgumentParser(description="Controls a Locust cluster")
     p.add_argument("-e", "--locust-endpoint", required=True,
         help="The address of the Locust master process")
-    p.add_argument("-u", "--username",
-        help="A username for the Locust server")
-    p.add_argument("-p", "--password",
-        help="A password for the Locust server. Prompts you if not provided.")
+    p.add_argument("-u", "--username", required=False,
+        help="A username for the Locust server [LOCUST_USERNAME]")
+    p.add_argument("-p", "--password", required=False,
+        help="A password for the Locust server. [LOCUST_PASSWORD]")
 
     # check args.command for which command was used
     subparsers = p.add_subparsers(help="The command to execute", dest="command")
@@ -33,31 +33,29 @@ def parse_args():
 
     return p.parse_args()
 
+def credentials(args):
+    username = args.username or os.environ.get('LOCUST_USERNAME')
+    password = args.password or os.environ.get('LOCUST_PASSWORD')
+    return HTTPBasicAuth(username, password)
+
 def start_locust(args):
     return requests.post(args.locust_endpoint.strip('/') + '/swarm',
                          data={'locust_count': args.locust_count,
                                'hatch_rate': args.hatch_rate },
-                         auth=HTTPBasicAuth(args.username, args.password))
+                         auth=credentials(args))
 
 def stop_locust(args):
     return requests.get(args.locust_endpoint.strip('/') + '/stop',
-                        auth=HTTPBasicAuth(args.username, args.password))
+                        auth=credentials(args))
 
 def get_status(args):
     return requests.get(args.locust_endpoint.strip('/') + '/status',
-                        auth=HTTPBasicAuth(args.username, args.password))
+                        auth=credentials(args))
 
 def handle_args(args):
     if not args.locust_endpoint.startswith('http'):
         old_endpoint = args.locust_endpoint
         args.locust_endpoint = "http://" + args.locust_endpoint
-        #print >>stderr, ("WARNING: Fixing locust endpoint '{0}' to be '{1}'"
-        #                 .format(old_endpoint, args.locust_endpoint))
-    if args.username and not args.password:
-        args.password = getpass.getpass()
-        if not args.password:
-            print >>stderr, "ERROR: Password required for user '{0}'".format(args.username)
-            sys.exit(1)
 
     if args.command == 'start':
         resp = start_locust(args)
@@ -72,5 +70,4 @@ def handle_args(args):
         sys.exit(1)
 
 if __name__ == "__main__":
-    args = parse_args()
-    handle_args(args)
+    handle_args(parse_args())
