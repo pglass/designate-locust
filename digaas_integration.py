@@ -110,22 +110,18 @@ class DigaasBehaviors(object):
             LOG.error("  response text: %s", resp.text)
 
 
-    def check_zone_create_or_update(self, resp):
+    def check_zone_create_or_update(self, resp, start_time):
         """Tell digaas to poll the nameservers to for a zone serial change
 
         :param resp: A successful POST /v2/zones or PATCH /v2/zones response
         """
-        # digaas uses the start_time when computing the propagation
-        # time to the nameserver. We're assuming this time is UTC.
-        start_time = self.parse_created_at(resp.json()['created_at'])
-
         for nameserver in self.config.nameservers:
             # print "  POST digaas (create/update zone) - %s" % nameserver
             r = self.client.post_poll_request(
                 nameserver = nameserver,
                 query_name = resp.json()['name'],
                 serial = resp.json()['serial'],
-                start_time = self.to_timestamp(start_time),
+                start_time = start_time,
                 condition = "serial_not_lower",
                 timeout = self.config.digaas_timeout,
                 frequency = self.config.digaas_interval)
@@ -139,17 +135,16 @@ class DigaasBehaviors(object):
                 nameserver = nameserver,
                 query_name = query_name,
                 serial = 0,
-                start_time = self.to_timestamp(start_time),
+                start_time = start_time,
                 condition = "zone_removed",
                 timeout = self.config.digaas_timeout,
                 frequency = self.config.digaas_interval)
             self._debug_resp(r)
 
-    def check_record_create_or_update(self, resp):
+    def check_record_create_or_update(self, resp, start_time):
         record_name = resp.json()["name"]
         expected_data = resp.json()["records"][0]
         record_type = resp.json()["type"]
-        start_time = self.parse_created_at(resp.json()['created_at'])
 
         for nameserver in self.config.nameservers:
             # print "  POST digaas (create/update recordset) - %s" % nameserver
@@ -159,7 +154,7 @@ class DigaasBehaviors(object):
                 query_name = record_name,
                 rdatatype = record_type,
                 serial = 0,
-                start_time = self.to_timestamp(start_time),
+                start_time = start_time,
                 condition = "data=" + expected_data,
                 timeout = self.config.digaas_timeout,
                 frequency = self.config.digaas_interval)

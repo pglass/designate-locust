@@ -79,7 +79,7 @@ class ZoneTasks(BaseTaskSet):
                               catch_response=True) as post_resp:
 
             if CONFIG.use_digaas and post_resp.ok:
-                self.digaas_behaviors.check_zone_create_or_update(post_resp)
+                self.digaas_behaviors.check_zone_create_or_update(post_resp, start_time)
 
             if not post_resp.ok:
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
@@ -173,7 +173,7 @@ class ZoneTasks(BaseTaskSet):
                 catch_response=True) as patch_resp:
 
             if CONFIG.use_digaas and patch_resp.ok:
-                self.digaas_behaviors.check_zone_create_or_update(patch_resp)
+                self.digaas_behaviors.check_zone_create_or_update(patch_resp, start_time)
 
             if not patch_resp.ok:
                 patch_resp.failure('Failure - got %s status code' % patch_resp.status_code)
@@ -204,16 +204,6 @@ class ZoneTasks(BaseTaskSet):
         if not zone:
             LOG.error("%s has no zones for deleting", tenant)
             return
-
-        # digaas uses the start_time when computing the propagation
-        # time to the nameserver. We're assuming this time is UTC.
-        # Normally, we use the created_at/update_at time returned by the api,
-        # but the api doesn't gives us that for a delete
-        #
-        # IMPORTANT: your locust box must be synchronized to network time,
-        # along with your digaas box, or digaas will compute bad durations
-        if CONFIG.use_digaas:
-            start_time = datetime.datetime.now()
 
         start_time = time.time()
         with client.delete_zone(

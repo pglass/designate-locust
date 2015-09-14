@@ -74,7 +74,7 @@ class RecordsetTasks(BaseTaskSet):
             client._log_if_bad_request(post_resp)
 
             if CONFIG.use_digaas and post_resp.ok:
-                self.digaas_behaviors.check_record_create_or_update(post_resp)
+                self.digaas_behaviors.check_record_create_or_update(post_resp, start_time)
 
             if not post_resp.ok:
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
@@ -133,7 +133,7 @@ class RecordsetTasks(BaseTaskSet):
                 catch_response=True) as put_resp:
 
             if CONFIG.use_digaas and put_resp.ok:
-                self.digaas_behaviors.check_record_create_or_update(put_resp)
+                self.digaas_behaviors.check_record_create_or_update(put_resp, start_time)
 
             if not put_resp.ok:
                 put_resp.failure("Failed with status code %s" % put_resp.status_code)
@@ -172,16 +172,7 @@ class RecordsetTasks(BaseTaskSet):
             LOG.error("%s has no recordsets for updating", tenant)
             return
 
-        # digaas uses the start_time when computing the propagation
-        # time to the nameserver. We're assuming this time is UTC.
-        # Normally, we use the created_at/update_at time returned by the api,
-        # but the api doesn't gives us that for a delete
-        #
-        # IMPORTANT: your locust box must be synchronized to network time,
-        # along with your digaas box, or digaas will compute bad durations
-        start_time = datetime.datetime.now()
-        start_time_seconds = time.time()
-
+        start_time = time.time()
         with client.delete_recordset(
                 recordset.zone.id,
                 recordset.id,
@@ -206,5 +197,5 @@ class RecordsetTasks(BaseTaskSet):
             self._poll_until_404(
                 api_call=api_call,
                 interval=interval,
-                success_function=lambda: self.async_success(start_time_seconds, del_resp),
+                success_function=lambda: self.async_success(start_time, del_resp),
                 failure_function=del_resp.failure)
