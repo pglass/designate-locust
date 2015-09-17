@@ -21,6 +21,8 @@ class RecordsetTasks(BaseTaskSet):
     def list_records(self):
         """GET /zones/ID/recordsets"""
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
         if not recordset:
@@ -33,6 +35,8 @@ class RecordsetTasks(BaseTaskSet):
     def get_record(self):
         """GET /zones/ID/recordsets/ID"""
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
         if not recordset:
@@ -53,6 +57,8 @@ class RecordsetTasks(BaseTaskSet):
 
     def _do_create_record(self, interval):
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if zone is None:
@@ -116,6 +122,8 @@ class RecordsetTasks(BaseTaskSet):
     def _do_modify_record(self, interval):
         """PATCH /zones/ID/recordsets/ID"""
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.select_recordset_for_get()
         if not recordset:
@@ -166,6 +174,8 @@ class RecordsetTasks(BaseTaskSet):
 
     def _do_remove_record(self, interval):
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.pop_recordset_for_delete()
         if not recordset:

@@ -20,6 +20,8 @@ class ZoneTasks(BaseTaskSet):
     def get_domain_by_id(self):
         """GET /zones/ID"""
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if not zone:
@@ -30,6 +32,8 @@ class ZoneTasks(BaseTaskSet):
     def get_domain_by_name(self):
         """GET /zones?name=<name>"""
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if not zone:
@@ -42,12 +46,16 @@ class ZoneTasks(BaseTaskSet):
     def list_domains(self):
         """GET /zones"""
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         client.list_zones(name='/v2/zones')
 
     def export_domain(self):
         """GET /zone/ID, Accept: text/dns"""
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if not zone:
@@ -65,6 +73,8 @@ class ZoneTasks(BaseTaskSet):
 
     def _do_create_domain(self, interval):
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone_name, email = random_zone_email()
         payload = { "name": zone_name,
@@ -114,6 +124,8 @@ class ZoneTasks(BaseTaskSet):
 
     def _do_import_zone(self, interval):
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone_file = random_zone_file()
         start_time = time.time()
@@ -157,6 +169,8 @@ class ZoneTasks(BaseTaskSet):
 
     def _do_modify_domain(self, interval):
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.select_zone_for_get()
         if not zone:
@@ -199,6 +213,8 @@ class ZoneTasks(BaseTaskSet):
 
     def _do_remove_domain(self, interval):
         tenant = self.select_random_tenant()
+        if not tenant:
+            return
         client = self.designate_client.as_user(tenant)
         zone = tenant.data.pop_zone_for_delete()
         if not zone:
