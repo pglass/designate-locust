@@ -43,8 +43,6 @@ persistence.setup_persistence()
 
 locust.config.RESET_STATS_AFTER_HATCHING = CONFIG.reset_stats
 
-_client = HttpSession(CONFIG.designate_host)
-_designate_client = DesignateClient(_client)
 _digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
 
 # use digaas to externally poll the nameserver(s) to record zone propagation

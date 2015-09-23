@@ -5,6 +5,8 @@ from locust import TaskSet
 from requests.packages.urllib3 import disable_warnings
 disable_warnings()
 
+import accurate_config as CONFIG
+
 PROJECT_ID_HEADER = 'X-Auth-Project-ID'
 TOKEN_HEADER = 'X-Auth-Token'
 ROLE_HEADER = 'X-Roles'
@@ -28,14 +30,18 @@ class DesignateClient(object):
     def as_user(self, tenant):
         return DesignateClient(self.client, tenant)
 
-    def _request(self, method, *args, **kwargs):
+    def _request(self, method, url, *args, **kwargs):
         # this is horrible. support a flag to disable request logging, but
         # don't pass that flag to the underlying requests lib
         no_log_request = kwargs.get('no_log_request', False)
         if 'no_log_request' in kwargs:
             del kwargs['no_log_request']
         self._prepare_headers(kwargs)
-        resp = method(*args, **kwargs)
+
+        if self.tenant and CONFIG.tenant_id_in_url:
+            url = url.replace("v2", "v2/{0}".format(self.tenant.tenant_id))
+
+        resp = method(url, *args, **kwargs)
         if not no_log_request:
             self._log_if_bad_request(resp)
         return resp

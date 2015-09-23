@@ -24,8 +24,10 @@ class Tenant(object):
 
         self.auth_endpoint = auth_endpoint
 
+        # these are found when we authenticate
         self._token = None
-        self._expiry= None
+        self._expiry = None
+        self.tenant_id = None
 
     def get_token(self):
         if not self._token or self.is_expired():
@@ -46,6 +48,7 @@ class Tenant(object):
         if auth_resp.ok:
             self._token = auth_resp.json()['access']['token']['id']
             self._expiry = self._parse_time(auth_resp.json()['access']['token']['expires'])
+            self.tenant_id = auth_resp.json()['access']['token']['tenant']['id']
         else:
             LOG.error("Failed to auth %s" % self)
             LOG.error("%s" % auth_resp.text)
