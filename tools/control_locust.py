@@ -21,9 +21,9 @@ def parse_args():
     # add the start command
     start_parser = subparsers.add_parser("start", help="Start load generation")
     start_parser.add_argument("-r", "--hatch-rate", type=float,
-        help="Specify the user spawn rate", required=True)
+        help="Specify the user spawn rate [HATCH_RATE]", required=False)
     start_parser.add_argument("-c", "--locust-count", type=int,
-        help="Specify the number of users", required=True)
+        help="Specify the number of users [LOCUST_COUNT]", required=False)
 
     # add the stop command
     stop_parser = subparsers.add_parser("stop", help="Stop load generation")
@@ -46,10 +46,15 @@ def credentials(args):
     password = args.password or os.environ.get('LOCUST_PASSWORD')
     return HTTPBasicAuth(username, password)
 
+def get_locust_params(args):
+    return dict(
+        locust_count = args.locust_count or os.environ['LOCUST_COUNT'],
+        hatch_rate = args.hatch_rate or os.environ['HATCH_RATE'],
+    )
+
 def start_locust(args):
     return requests.post(args.locust_endpoint.strip('/') + '/swarm',
-                         data={'locust_count': args.locust_count,
-                               'hatch_rate': args.hatch_rate },
+                         data=get_locust_params(args),
                          auth=credentials(args))
 
 def stop_locust(args):

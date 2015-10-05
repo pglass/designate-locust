@@ -22,10 +22,12 @@ class DesignateClient(object):
         "Accept": "application/json",
     }
 
-    def __init__(self, client, tenant=None, use_project_id=False):
+    def __init__(self, client, tenant=None, use_project_id=False,
+                 tenant_id_in_url=CONFIG.tenant_id_in_url):
         self.client = client
         self.tenant = tenant
         self.use_project_id = use_project_id
+        self.tenant_id_in_url = tenant_id_in_url
 
     def as_user(self, tenant):
         return DesignateClient(self.client, tenant)
@@ -38,7 +40,7 @@ class DesignateClient(object):
             del kwargs['no_log_request']
         self._prepare_headers(kwargs)
 
-        if self.tenant and CONFIG.tenant_id_in_url:
+        if self.tenant and self.tenant_id_in_url:
             url = url.replace("v2", "v2/{0}".format(self.tenant.tenant_id))
 
         resp = method(url, *args, **kwargs)
