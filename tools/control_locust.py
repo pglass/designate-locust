@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 from sys import stderr
 import argparse
 import requests
@@ -35,6 +36,8 @@ def parse_args():
         help="Wait for a specific status")
     wait_for_status_parser.add_argument("status",
         help="The status to wait for")
+    wait_for_status_parser.add_argument("-t", "--timeout", type=int,
+            default=600, help="Timeout after this many seconds (default: 600)")
 
     return p.parse_args()
 
@@ -60,7 +63,12 @@ def get_status(args):
 def wait_for_status(args):
     expected_status = args.status
     print "Waiting for status %r" % expected_status
+    end_time = time.time() + args.timeout
     while True:
+        if time.time() >= end_time:
+            raise Exception("Timed out after {0} seconds; expected '{1}'"
+                            .format(args.timeout, expected_status))
+
         resp = get_status(args)
         if not resp.ok:
             print "Failed to get Locust's status"
@@ -89,5 +97,13 @@ def handle_args(args):
     if not resp.ok:
         sys.exit(1)
 
+def main():
+    try:
+        handle_args(parse_args())
+    except Exception as e:
+        print "ERROR: {0}".format(str(e))
+        return 1
+    return 0
+
 if __name__ == "__main__":
-    handle_args(parse_args())
+    sys.exit(main())
