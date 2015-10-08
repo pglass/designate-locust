@@ -52,7 +52,20 @@ class ZoneTasks(BaseTaskSet):
         client.list_zones(name='/v2/zones')
 
     def export_domain(self):
-        """GET /zone/ID, Accept: text/dns"""
+        """This runs the entire export domain sequence:
+
+            1. POST /zones/ID/tasks/export
+            2. GET /zones/tasks/exports/ID (poll for COMPLETED)
+            3. GET /zones/tasks/export (Accept: text/dns)
+        """
+        gevent.spawn(
+            GreenletManager.get().tracked_greenlet,
+            lambda: self._do_export_domain(interval=2),
+            timeout=60
+        )
+
+
+    def _do_export_domain(self, interval):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -61,7 +74,36 @@ class ZoneTasks(BaseTaskSet):
         if not zone:
             LOG.error("%s has no zones for getting", tenant)
             return
-        resp = client.export_zone(zone.id, name='/v2/zones/ID - export')
+
+        # this is asynchronous
+        start_time = time.time()
+        with client.post_zone_export(zone.id,
+                                     name='/v2/zones/ID/tasks/export',
+                                     catch_response=True) as post_resp:
+
+            if not post_resp.ok:
+                post_resp.failure("Failed with status code %s" % post_resp.status_code)
+                return
+
+            export_id = post_resp.json()['id']
+            api_call = lambda: client.get_zone_export(
+                export_id=export_id,
+                name='/v2/zones/tasks/exports/ID',
+            )
+
+            self._poll_until_active_or_error(
+                api_call=api_call,
+                interval=interval,
+                status_function=lambda r: r.json()['status'],
+                success_function=lambda: self.async_success(start_time, post_resp),
+                failure_function=post_resp.failure,
+                expected='COMPLETE',
+            )
+
+            export_resp = client.get_exported_zone_file(
+                export_id=export_id,
+                name='/v2/zones/tasks/exports/ID/export',
+            )
 
     def create_domain(self):
         """POST /zones"""

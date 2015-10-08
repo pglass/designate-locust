@@ -56,6 +56,9 @@ class BaseTaskSet(TaskSet):
             gevent.sleep(interval)
 
     def async_success(self, start_time, resp_obj):
+        """When polling for an ACTIVE status, we want the response time to be
+        the time until we saw the ACTIVE status. This is used to do that
+        in combination with catch_response"""
         response_time = int((time.time() - start_time) * 1000)
         resp_obj.locust_request_meta['response_time'] = response_time
         resp_obj.success()

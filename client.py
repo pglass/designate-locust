@@ -131,10 +131,18 @@ class DesignateClient(object):
         url = "/v2/zones/tasks/imports/{0}".format(import_id)
         return self._request(self.client.get, url, *args, **kwargs)
 
-    def export_zone(self, zone_id, *args, **kwargs):
+    def post_zone_export(self, zone_id, *args, **kwargs):
+        url = "/v2/zones/{0}/tasks/export".format(zone_id)
+        return self._request(self.client.post, url, *args, **kwargs)
+
+    def get_zone_export(self, export_id, *args, **kwargs):
+        url = "/v2/zones/tasks/exports/{0}".format(export_id)
+        return self._request(self.client.get, url, *args, **kwargs)
+
+    def get_exported_zone_file(self, export_id, *args, **kwargs):
         self._prepare_headers(kwargs)
         kwargs['headers']['Accept'] = 'text/dns'
-        url = "/admin/zones/export/{0}".format(zone_id)
+        url = "/v2/zones/tasks/exports/{0}/export".format(export_id)
         return self._request(self.client.get, url, *args, **kwargs)
 
     #############################################
