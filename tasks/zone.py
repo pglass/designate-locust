@@ -171,19 +171,14 @@ class ZoneTasks(BaseTaskSet):
         client = self.designate_client.as_user(tenant)
         zone_file = random_zone_file()
         start_time = time.time()
-        with client.import_zone(data=zone_file,
+        with client.import_zone(data=zone_file.get_zone_file_text(),
                                 name='/v2/zones/tasks/imports',
                                 catch_response=True) as import_resp:
 
-            #print "[%s]: %s\n%s\nResponse:\n%s" % (
-            #    import_resp.status_code,
-            #    import_resp.request.url,
-            #    import_resp.request.body,
-            #    import_resp.text)
-
-            # TODO: tell digaas to check the zone name. we need the zone name here.
-            # if CONFIG.use_digaas and import_resp.ok:
-            #     self.digaas_behaviors.check_zone_create_or_update(import_resp)
+            if CONFIG.use_digaas and import_resp.ok:
+                self.digaas_behaviors.check_zone_create_or_update(
+                    import_resp, start_time, name=zone_file.zone_name,
+                )
 
             if not import_resp.ok:
                 import_resp.failure("Failed with status code %s" % import_resp.status_code)

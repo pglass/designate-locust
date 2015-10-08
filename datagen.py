@@ -24,15 +24,25 @@ def pop_random_item(vals):
         return vals.pop(i)
 
 def random_zone_file(name='random_import', user='rando'):
-    name = randomize(randomize(name))
-    zone = "{0}.com.".format(name)
-    email = "{0}.{1}".format(user, zone)
+    """Returns a RandomZoneFile"""
+    return RandomZoneFile(name=name, user=user)
 
-    result = ""
-    result += "$ORIGIN %s\n" % zone
-    result += "\n"
-    result += "@ IN SOA ns.{0} {1} 100 101 102 103 104\n".format(zone, email)
-    result += "@ IN NS ns.%s\n" % zone
-    result += "ns.%s IN A %s\n" % (zone, random_ip())
-    result += "mail.%s IN A %s\n" % (zone, random_ip())
-    return result
+class RandomZoneFile(object):
+
+    def __init__(self, name='random_import', user='rando'):
+        name = randomize(randomize(name))
+        self.zone_name = "{0}.com.".format(name)
+        self.email = "{0}.{1}".format(user, self.zone_name)
+
+    def __str__(self):
+        result = ""
+        result += "$ORIGIN %s\n" % self.zone_name
+        result += "\n"
+        result += "@ IN SOA ns.{0} {1} 100 101 102 103 104\n".format(self.zone_name, self.email)
+        result += "@ IN NS ns.%s\n" % self.zone_name
+        result += "ns.%s IN A %s\n" % (self.zone_name, random_ip())
+        result += "mail.%s IN A %s\n" % (self.zone_name, random_ip())
+        return result
+
+    def get_zone_file_text(self):
+        return str(self)

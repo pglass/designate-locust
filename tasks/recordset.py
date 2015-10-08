@@ -188,7 +188,6 @@ class RecordsetTasks(BaseTaskSet):
                 recordset.id,
                 name='/v2/zones/ID/recordsets/ID',
                 catch_response=True) as del_resp:
-            print 'DELETED recordset %s' % recordset.id
 
             if CONFIG.use_digaas and del_resp.ok:
                 self.digaas_behaviors.check_name_removed(recordset.zone.name, start_time)
