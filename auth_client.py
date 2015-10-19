@@ -3,7 +3,6 @@ import logging
 
 import requests
 
-import accurate_config as CONFIG
 
 class AuthClient(object):
 
@@ -16,6 +15,7 @@ class AuthClient(object):
         if endpoint is not None:
             self.endpoint = endpoint
         else:
+            import accurate_config as CONFIG
             self.endpoint = CONFIG.auth_endpoint.strip('/')
 
     def get_token(self, username, api_key):

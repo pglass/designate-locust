@@ -11,9 +11,9 @@ from client import DesignateClient
 from models import Tenant, Zone, Recordset
 from datagen import random_zone_email, randomize, random_ip
 from auth_client import AuthClient
-from tasks.gather import PaginationFrontier
+from tasks.paginator import PaginationFrontier
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 def parse_args():
     p = argparse.ArgumentParser(description=
@@ -231,7 +231,7 @@ class TenantPrepper(object):
 
 def check_resp(resp):
     if not resp.ok:
-        raise Exception("Bad response! %s - %s" % (resp, resp.text))
+        raise Exception("Bad response! %s - %s %s" % (resp, resp.request.url, resp.text))
 
 
 if __name__ == '__main__':

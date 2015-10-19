@@ -5,8 +5,6 @@ from locust import TaskSet
 from requests.packages.urllib3 import disable_warnings
 disable_warnings()
 
-import accurate_config as CONFIG
-
 PROJECT_ID_HEADER = 'X-Auth-Project-ID'
 TOKEN_HEADER = 'X-Auth-Token'
 ROLE_HEADER = 'X-Roles'
@@ -23,14 +21,19 @@ class DesignateClient(object):
     }
 
     def __init__(self, client, tenant=None, use_project_id=False,
-                 tenant_id_in_url=CONFIG.tenant_id_in_url):
+                 tenant_id_in_url=True):
         self.client = client
         self.tenant = tenant
         self.use_project_id = use_project_id
         self.tenant_id_in_url = tenant_id_in_url
 
     def as_user(self, tenant):
-        return DesignateClient(self.client, tenant)
+        return DesignateClient(
+            client=self.client,
+            tenant=tenant,
+            use_project_id=self.use_project_id,
+            tenant_id_in_url=self.tenant_id_in_url,
+        )
 
     def _request(self, method, url, *args, **kwargs):
         # this is horrible. support a flag to disable request logging, but

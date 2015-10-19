@@ -15,7 +15,8 @@ class BaseTaskSet(TaskSet):
     def __init__(self, tenant_list, *args, **kwargs):
         super(BaseTaskSet, self).__init__(*args, **kwargs)
 
-        self.designate_client = client.DesignateClient(self.client)
+        self.designate_client = client.DesignateClient(self.client,
+            tenant_id_in_url=CONFIG.tenant_id_in_url)
 
         self.tenant_list = tenant_list
 

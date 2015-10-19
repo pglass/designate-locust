@@ -89,7 +89,8 @@ class LargeTasks(ZoneTasks, RecordsetTasks):
 
     def __init__(self, *args, **kwargs):
         super(LargeTasks, self).__init__(LARGE_TENANTS, *args, **kwargs)
-        self.designate_client = DesignateClient(self.client)
+        self.designate_client = DesignateClient(self.client,
+            tenant_id_in_url=CONFIG.tenant_id_in_url)
 
 
 class SmallTasks(ZoneTasks, RecordsetTasks):
@@ -112,7 +113,8 @@ class SmallTasks(ZoneTasks, RecordsetTasks):
 
     def __init__(self, *args, **kwargs):
         super(SmallTasks, self).__init__(SMALL_TENANTS, *args, **kwargs)
-        self.designate_client = DesignateClient(self.client)
+        self.designate_client = DesignateClient(self.client,
+            tenant_id_in_url=CONFIG.tenant_id_in_url)
 
 class AccurateTaskSet(TaskSet):
     """Combines large tenants and small tenants with appropriate weights."""
