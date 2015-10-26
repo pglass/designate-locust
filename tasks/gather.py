@@ -1,4 +1,5 @@
 import logging
+import urlparse
 
 import locust.events
 import locust.runners
@@ -26,10 +27,6 @@ class GatherTasks(BaseTaskSet):
         if not GatherTasks.frontier:
             GatherTasks.frontier = PaginationFrontier(self.tenant_list)
 
-    def _get_path_from_full_url(self, link):
-        parts = link.split('/v2/')
-        return '/v2/' + parts[1]
-
     def done(self):
         for tenant in self.frontier.tenant_list:
             enough_zones_and_recordsets = tenant.data.exceeds_quotas(
@@ -55,11 +52,13 @@ class GatherTasks(BaseTaskSet):
         link, tenant = self.frontier.pop_next_zone_link()
         if not link:
             return
-        link = self._get_path_from_full_url(link)
+        # we want to be careful to retain the 'marker=<uuid>' that's used to
+        # grab different pages of a paginated list
+        path, params = self.frontier.parse_url(link)
+        params['sort_key'] = 'id'
 
         client = self.designate_client.as_user(tenant)
-        resp = client.get(link, name='/v2/zones',
-                          params={'sort_key': 'id'})
+        resp = client.get(path, name='/v2/zones', params=params)
         if not resp.ok:
             LOG.error("failed to list zones while gathering zones")
             return
@@ -67,7 +66,7 @@ class GatherTasks(BaseTaskSet):
         zones = resp.json()['zones']
         links = resp.json()['links']
         LOG.info("%s -- fetched %s zones for tenant %s",
-                resp.request.url, len(zones), tenant)
+                 resp.request.url, len(zones), tenant)
         if 'next' in links:
             self.frontier.add_zone_link(links['next'], tenant)
         else:
@@ -79,7 +78,8 @@ class GatherTasks(BaseTaskSet):
             if len(tenant.data.zones_for_get) <= len(tenant.data.zones_for_delete):
                 tenant.data.zones_for_get.append(zone)
 
-                recordset_link = z['links']['self'].strip('/') + '/recordsets'
+                path, _ = self.frontier.parse_url(z['links']['self'])
+                recordset_link = "{0}/recordsets".format(path)
                 self.frontier.add_recordset_link(zone, recordset_link, tenant)
             else:
                 tenant.data.zones_for_delete.append(zone)
@@ -93,10 +93,11 @@ class GatherTasks(BaseTaskSet):
         zone, link, tenant = self.frontier.pop_next_recordset_link()
         if not link:
             return
-        link = self._get_path_from_full_url(link)
+        path, params = self.frontier.parse_url(link)
+        params['sort_key'] = 'id'
 
         client = self.designate_client.as_user(tenant)
-        resp = client.get(link, name='/v2/zones/ID/recordsets')
+        resp = client.get(path, name='/v2/zones/ID/recordsets', params=params)
         if not resp.ok:
             LOG.error("failed to list recordsets while gathering recordsets")
             return

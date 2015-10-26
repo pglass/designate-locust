@@ -166,10 +166,11 @@ class TenantPrepper(object):
             if not link:
                 return found_zones
 
+            path, params = frontier.parse_url(link)
+            params['sort_key'] = 'id'
+
             print "%s: GET %s" % (self.tenant.id, link)
-            resp = self.client.get(link, params={'sort_key': 'id'})
-            # print resp.request.headers
-            # print resp.request.body
+            resp = self.client.get(path, params=params)
             check_resp(resp)
 
             zones = resp.json()['zones']
@@ -202,9 +203,11 @@ class TenantPrepper(object):
             if not link:
                 return found_recordsets
 
+            path, params = frontier.parse_url(link)
+            params['sort_key'] = 'id'
+
             print "%s: GET %s" % (self.tenant.id, link)
-            resp = self.client.get(link)
-            # print resp.text
+            resp = self.client.get(path, params=params)
             check_resp(resp)
 
             recordsets = resp.json()['recordsets']

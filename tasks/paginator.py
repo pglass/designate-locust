@@ -1,3 +1,5 @@
+import urlparse
+
 class PaginationFrontier(object):
     """This is the frontier of "next" links for exploring paginated lists
     across multiple tenants"""
@@ -6,6 +8,14 @@ class PaginationFrontier(object):
         self.tenant_list = list(tenants)
         self.next_zone_links = [('/v2/zones', t) for t in self.tenant_list]
         self.next_recordset_links = []
+
+    @classmethod
+    def parse_url(cls, link):
+        """Return a tuple (path, params) where path is the url path without
+        params and params is a dictionary of all the url parameters"""
+        parts = urlparse.urlsplit(link)
+        params = urlparse.parse_qs(parts.query)
+        return parts.path, params
 
     def add_zone_link(self, link, tenant):
         self.next_zone_links.append((link, tenant))
