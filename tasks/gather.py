@@ -58,7 +58,8 @@ class GatherTasks(BaseTaskSet):
         link = self._get_path_from_full_url(link)
 
         client = self.designate_client.as_user(tenant)
-        resp = client.get(link, name='/v2/zones')
+        resp = client.get(link, name='/v2/zones',
+                          params={'sort_key': 'id'})
         if not resp.ok:
             LOG.error("failed to list zones while gathering zones")
             return

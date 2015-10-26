@@ -167,7 +167,7 @@ class TenantPrepper(object):
                 return found_zones
 
             print "%s: GET %s" % (self.tenant.id, link)
-            resp = self.client.get(link)
+            resp = self.client.get(link, params={'sort_key': 'id'})
             # print resp.request.headers
             # print resp.request.body
             check_resp(resp)
