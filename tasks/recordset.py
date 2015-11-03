@@ -80,7 +80,7 @@ class RecordsetTasks(BaseTaskSet):
             client._log_if_bad_request(post_resp)
 
             if CONFIG.use_digaas and post_resp.ok:
-                self.digaas_behaviors.check_record_create_or_update(post_resp, start_time)
+                self.digaas_behaviors.observe_record_create(post_resp, start_time)
 
             if not post_resp.ok:
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
@@ -141,7 +141,7 @@ class RecordsetTasks(BaseTaskSet):
                 catch_response=True) as put_resp:
 
             if CONFIG.use_digaas and put_resp.ok:
-                self.digaas_behaviors.check_record_create_or_update(put_resp, start_time)
+                self.digaas_behaviors.observe_record_update(put_resp, start_time)
 
             if not put_resp.ok:
                 put_resp.failure("Failed with status code %s" % put_resp.status_code)
@@ -190,7 +190,12 @@ class RecordsetTasks(BaseTaskSet):
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
-                self.digaas_behaviors.check_name_removed(recordset.zone.name, start_time)
+                self.digaas_behaviors.observe_record_delete(
+                    name=recordset.zone.name,
+                    rdata=recordset.data,
+                    rdatatype=recordset.type,
+                    start_time=start_time,
+                )
 
             if not del_resp.ok:
                 del_resp.failure("Failed with status_code %s" % del_resp.status_code)

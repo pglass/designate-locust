@@ -18,18 +18,26 @@ import os
 import requests
 import shutil
 import time
-import uuid
 
-import locust
 import gevent
 
-import insight
 import persistence
 
 LOG = logging.getLogger(__name__)
+EPOCH_START = datetime.datetime(1970, 1, 1)
 
 
 class DigaasClient(object):
+
+    ZONE_CREATE = 'ZONE_CREATE'
+    ZONE_UPDATE = 'ZONE_UPDATE'
+    ZONE_DELETE = 'ZONE_DELETE'
+    RECORD_CREATE = 'RECORD_CREATE'
+    RECORD_UPDATE = 'RECORD_UPDATE'
+    RECORD_DELETE = 'RECORD_DELETE'
+
+    PROPAGATION_PLOT = 'propagation'
+    QUERY_PLOT = 'query'
 
     JSON_HEADERS = {
         "Content-Type": "application/json",
@@ -39,31 +47,40 @@ class DigaasClient(object):
     def __init__(self, endpoint):
         self.endpoint = endpoint.rstrip('/')
 
-    def post_poll_request(self, nameserver, query_name, serial, start_time,
-                          condition, timeout, frequency, rdatatype=None):
-        url = self.endpoint + '/poll_requests'
+    def post_observer(self, name, nameserver, start_time, type, timeout,
+                      interval, serial=None, rdata=None, rdatatype=None):
+        """
+        :param serial: only pass this in is type is ZONE_UPDATE
+        :param rdata: only pass this if the type is RECORD_*
+        :param rdatatype: only pass this if the type is RECORD_*
+        """
+        url = self.endpoint + '/observers'
         payload = dict(
-            nameserver = nameserver,
-            query_name = query_name,
-            serial = serial,
-            start_time = start_time,
-            condition = condition,
-            timeout = timeout,
-            frequency = frequency,
+            name=name,
+            nameserver=nameserver,
+            type=type,
+            start_time=start_time,
+            timeout=timeout,
+            interval=interval,
         )
         if rdatatype is not None:
             payload['rdatatype'] = rdatatype
-        return requests.post(url, data=json.dumps(payload), headers=self.JSON_HEADERS)
+        if rdata is not None:
+            payload['rdata'] = rdata
+        if serial is not None:
+            payload['serial'] = serial
+        return requests.post(url, data=json.dumps(payload),
+                             headers=self.JSON_HEADERS)
 
-    def get_poll_request(self, id):
-        url = "{0}/poll_requests/{1}".format(self.endpoint, id)
+    def get_observer(self, id):
+        url = "{0}/observers/{1}".format(self.endpoint, id)
         return requests.get(url, headers=self.JSON_HEADERS)
 
     def post_stats_request(self, start_time, end_time):
         url = self.endpoint + '/stats'
         payload = json.dumps(dict(
-            start_time = start_time,
-            end_time = end_time,
+            start_time=start_time,
+            end_time=end_time,
         ))
         return requests.post(url, data=payload, headers=self.JSON_HEADERS)
 
@@ -71,15 +88,20 @@ class DigaasClient(object):
         url = "{0}/stats/{1}".format(self.endpoint, id)
         return requests.get(url, headers=self.JSON_HEADERS)
 
-    def get_image(self, id):
-        """Use resp.raw to access the image data"""
-        url = "{0}/images/{1}".format(self.endpoint, id)
-        resp = requests.get(url, stream=True)
-        resp.raw.decode_content = True
-        return resp
+    def get_stats_summary(self, id):
+        url = "{0}/stats/{1}/summary".format(self.endpoint, id)
+        return requests.get(url, headers=self.JSON_HEADERS)
+
+    def get_plot(self, stats_id, plot_type):
+        """
+        :param stats_id: the id of the stats request
+        :param plot_type: either 'propagation' or 'query'
+        """
+        assert plot_type in ('propagation', 'query')
+        url = "{0}/stats/{1}/summary/{2}".format(self.endpoint, id, plot_type)
+        return requests.get(url)
 
 
-EPOCH_START = datetime.datetime(1970, 1, 1)
 class DigaasBehaviors(object):
     """A place to put code to declutter our Tasks class"""
 
@@ -104,89 +126,165 @@ class DigaasBehaviors(object):
         return datetime.datetime.strptime(created_at, '%Y-%m-%dT%H:%M:%S.%f')
 
     def _debug_resp(self, resp):
-        if not resp.ok:
-            LOG.error("Digaas request failed")
-            LOG.error("  request body: %s", resp.request.body)
-            LOG.error("  response text: %s", resp.text)
+        if resp.ok:
+            return
 
+        # format the request
+        msg = "\n{0} {1}".format(resp.request.method, resp.request.url)
+        for k, v in resp.request.headers.items():
+            msg += "\n{0}: {1}".format(k, v)
+        if resp.request.body:
+            msg += "\n{0}".format(resp.request.body)
+        else:
+            msg += "\n<empty-body>"
 
-    def check_zone_create_or_update(self, resp, start_time, name=None):
-        """Tell digaas to poll the nameservers to for a zone serial change
+        msg += "\n"
 
+        # format the response
+        msg += "\n{0} {1}".format(resp.status_code, resp.reason)
+        for k, v in resp.headers.items():
+            msg += "\n{0}: {1}".format(k, v)
+        msg += "\n{0}".format(resp.text)
+        msg = "\n  ".join(msg.split('\n'))
+        LOG.debug(msg)
+
+    def observe_zone_create(self, resp, start_time, name=None):
+        """
         :param resp: A successful POST /v2/zones or PATCH /v2/zones response
         :param name: Override the query name with this, instead of what's in
             the resp (useful for zone imports)
         """
-
-        # TODO: we're just going to assume that if the query name is specified
-        # that we're checking for a zone import
         query_name = name
-        serial = 0
         if query_name is None:
             query_name = resp.json()['name']
-            serial = resp.json()['serial']
         for nameserver in self.config.nameservers:
-            # print "  POST digaas (create/update zone) - %s" % nameserver
-            r = self.client.post_poll_request(
-                nameserver = nameserver,
-                query_name = query_name,
-                serial = serial,
-                start_time = start_time,
-                condition = "serial_not_lower",
-                timeout = self.config.digaas_timeout,
-                frequency = self.config.digaas_interval)
+            r = self.client.post_observer(
+                name=query_name,
+                nameserver=nameserver,
+                start_time=start_time,
+                type=self.client.ZONE_CREATE,
+                timeout=self.config.digaas_timeout,
+                interval=self.config.digaas_interval,
+            )
             self._debug_resp(r)
 
-    def check_name_removed(self, query_name, start_time):
-        """Tell digaas to poll the nameservers until the name is removed"""
+    def observe_zone_update(self, resp, start_time):
+        name = resp.json()['name']
+        serial = resp.json()['serial']
         for nameserver in self.config.nameservers:
-            # print "  POST digaas (delete zone/record) - %s" % nameserver
-            r = self.client.post_poll_request(
-                nameserver = nameserver,
-                query_name = query_name,
-                serial = 0,
-                start_time = start_time,
-                condition = "zone_removed",
-                timeout = self.config.digaas_timeout,
-                frequency = self.config.digaas_interval)
+            r = self.client.post_observer(
+                name=name,
+                nameserver=nameserver,
+                start_time=start_time,
+                type=self.client.ZONE_UPDATE,
+                timeout=self.config.digaas_timeout,
+                interval=self.config.digaas_interval,
+                serial=serial,
+            )
             self._debug_resp(r)
 
-    def check_record_create_or_update(self, resp, start_time):
-        record_name = resp.json()["name"]
-        expected_data = resp.json()["records"][0]
-        record_type = resp.json()["type"]
+    def observe_zone_delete(self, name, start_time):
+        for nameserver in self.config.nameservers:
+            r = self.client.post_observer(
+                name=name,
+                nameserver=nameserver,
+                start_time=start_time,
+                type=self.client.ZONE_DELETE,
+                timeout=self.config.digaas_timeout,
+                interval=self.config.digaas_interval,
+            )
+            self._debug_resp(r)
+
+    def observe_record_create(self, resp, start_time):
+        name = resp.json()["name"]
+        rdata = resp.json()["records"][0]
+        rdatatype = resp.json()["type"]
 
         for nameserver in self.config.nameservers:
-            # print "  POST digaas (create/update recordset) - %s" % nameserver
-            # digaas will poll until the zone's serial is higher
-            r = self.client.post_poll_request(
-                nameserver = nameserver,
-                query_name = record_name,
-                rdatatype = record_type,
-                serial = 0,
-                start_time = start_time,
-                condition = "data=" + expected_data,
-                timeout = self.config.digaas_timeout,
-                frequency = self.config.digaas_interval)
+            r = self.client.post_observer(
+                name=name,
+                nameserver=nameserver,
+                start_time=start_time,
+                type=self.client.RECORD_CREATE,
+                timeout=self.config.digaas_timeout,
+                interval=self.config.digaas_interval,
+                rdata=rdata,
+                rdatatype=rdatatype,
+            )
+            self._debug_resp(r)
+
+    def observe_record_update(self, resp, start_time):
+        name = resp.json()["name"]
+        rdata = resp.json()["records"][0]
+        rdatatype = resp.json()["type"]
+
+        for nameserver in self.config.nameservers:
+            r = self.client.post_observer(
+                name=name,
+                nameserver=nameserver,
+                start_time=start_time,
+                type=self.client.RECORD_UPDATE,
+                timeout=self.config.digaas_timeout,
+                interval=self.config.digaas_interval,
+                rdata=rdata,
+                rdatatype=rdatatype,
+            )
+            self._debug_resp(r)
+
+    def observe_record_delete(self, name, rdata, rdatatype, start_time):
+        for nameserver in self.config.nameservers:
+            r = self.client.post_observer(
+                name=name,
+                nameserver=nameserver,
+                start_time=start_time,
+                type=self.client.RECORD_DELETE,
+                timeout=self.config.digaas_timeout,
+                interval=self.config.digaas_interval,
+                rdata=rdata,
+                rdatatype=rdatatype,
+            )
             self._debug_resp(r)
 
 
-def fetch_plot(client, start_time, end_time, output_filename):
-    LOG.info("fetching plot")
+def fetch_stats(client, start_time, end_time, prop_output_file,
+                query_output_file, summary_output_file):
+    LOG.info("fetching stats from digaas")
     post_resp = client.post_stats_request(start_time, end_time)
     if not post_resp.ok:
-        LOG.error("error fetching plot: %s", post_resp)
+        LOG.error("error fetching stats: %s", post_resp)
         return
+    stats_id = post_resp.json()['id']
 
-    id = post_resp.json()['id']
-
+    # poll for COMPLETE
+    LOG.info("waiting for stats request %s to complete", stats_id)
     timeout = 300
     end_time = time.time() + timeout
     while time.time() < end_time:
         # we must yield to other greenlets or this loop will block the world
-        gevent.sleep(1)
-
+        gevent.sleep(2)
         resp = client.get_stats_request(id)
+        if resp.ok and resp.json()['status'] == 'COMPLETE':
+            break
+        elif not resp.ok or resp.json()['status'] == 'ERROR':
+            LOG.error("Stats request ERRORed (id=%s)", stats_id)
+            return
+
+    def save_as(resp, filename):
+        output_path = os.path.join(persistence.images_dir, filename)
+        output_path = os.path.abspath(output_path)
+        LOG.debug("writing to file %s" % output_path)
+        with open(output_path, 'wb') as f:
+            shutil.copyfileobj(image_resp.raw, f)
+
+
+
+    summary = client.get_stats_summary(stats_id)
+    prop = client.get_plot(stats_id, client.PROPAGATION_PLOT)
+    if prop.ok:
+        save_as(prop, "
+    query = client.get_plot(stats_id, client.QUERY_PLOT)
+
+
         LOG.info(str(resp))
         if resp.ok:
             LOG.info("stats request suceeded")
@@ -217,18 +315,25 @@ def persist_digaas_data(stats, digaas_client):
     start_time = int(stats['start_time'])
     end_time = int(stats['last_request_timestamp'] + 1)
     LOG.info("start_time = %s, end_time = %s", start_time, end_time)
-    plot_filename = "propagation_plot{0}.png".format(start_time)
+    propagation_plot = "propagation_plot{0}.png".format(start_time)
+    query_plot = "query_plot{0}.png".format(start_time)
+    summary_stats = "summary_stats{0}.json".format(start_time)
     LOG.info("plot_filename = %s", plot_filename)
 
-    gevent.spawn(fetch_plot, digaas_client, start_time, end_time, plot_filename)
+    gevent.spawn(
+        fetch_stats, digaas_client, start_time, end_time,
+        propagation_plot,
+        query_plot,
+        summary_stats,
+    )
+
 
     stats['digaas'] = {
         'plot_file': plot_filename,
     }
 
 
-def setup_digaas_integration(digaas_client):
+def setup(digaas_client):
     LOG.info("USING DIGaaS")
-    # register our event handlers
     persistence.persisting_info += \
         lambda stats: persist_digaas_data(stats, digaas_client)

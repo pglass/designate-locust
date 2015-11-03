@@ -43,12 +43,12 @@ persistence.setup_persistence()
 
 locust.config.RESET_STATS_AFTER_HATCHING = CONFIG.reset_stats
 
-_digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
 
 # use digaas to externally poll the nameserver(s) to record zone propagation
 # times through Designate's stack
 if CONFIG.use_digaas and not insight.is_slave():
-    digaas_integration.setup_digaas_integration(_digaas_client)
+    _digaas_client = digaas_integration.DigaasClient(CONFIG.digaas_endpoint)
+    digaas_integration.setup(_digaas_client)
 
 if not insight.is_master():
     # TODO: the tenant id is actually the username. it should be named so.
