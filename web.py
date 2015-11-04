@@ -42,7 +42,7 @@ def setup_authentication(authorized_username, authorized_password):
         pass
 
 module_dir = os.path.dirname(__file__)
-images_dir = os.path.join(module_dir, 'images')
+persistence_dir = os.path.join(module_dir, 'persisted_files')
 
 
 # By default, jinja uses a directory somewhere in the Locust codebase
@@ -78,9 +78,9 @@ def reports_json():
     result.sort(key=lambda item: -item['timestamp'])
     return flask.Response(json.dumps(result), mimetype='application/json')
 
-@web.app.route('/images/<name>')
-def image(name):
-    d = os.path.join(module_dir, images_dir)
+@web.app.route('/files/<name>')
+def get_file(name):
+    d = os.path.join(module_dir, persistence.persistence_dir)
     return flask.send_from_directory(d, name)
 
 @web.app.route('/reports/<name>')
@@ -107,9 +107,14 @@ def report(name):
         "end_datetime": end_datetime,
         "duration": duration
     }
-    propagation_plot = stats['digaas'].get('plot_file') if 'digaas' in stats else None
-    return flask.render_template('report.html', stats=stats, timeinfo=timeinfo,
-            propagation_plot=propagation_plot)
+    propagation_plot = stats['digaas'].get('propagation_plot') if 'digaas' in stats else None
+    query_plot = stats['digaas'].get('query_plot') if 'digaas' in stats else None
+    return flask.render_template('report.html',
+            stats=stats,
+            timeinfo=timeinfo,
+            propagation_plot=propagation_plot,
+            query_plot=query_plot,
+    )
 
 @web.app.route('/status')
 def status():

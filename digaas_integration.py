@@ -27,6 +27,27 @@ LOG = logging.getLogger(__name__)
 EPOCH_START = datetime.datetime(1970, 1, 1)
 
 
+def resp_to_string(resp):
+    # format the request
+    msg = "\n{0} {1}".format(resp.request.method, resp.request.url)
+    for k, v in resp.request.headers.items():
+        msg += "\n{0}: {1}".format(k, v)
+    if resp.request.body:
+        msg += "\n{0}".format(resp.request.body)
+    else:
+        msg += "\n<empty-body>"
+
+    msg += "\n"
+
+    # format the response
+    msg += "\n{0} {1}".format(resp.status_code, resp.reason)
+    for k, v in resp.headers.items():
+        msg += "\n{0}: {1}".format(k, v)
+    msg += "\n{0}".format(resp.text)
+    msg = "\n  ".join(msg.split('\n'))
+    return msg
+
+
 class DigaasClient(object):
 
     ZONE_CREATE = 'ZONE_CREATE'
@@ -79,17 +100,17 @@ class DigaasClient(object):
     def post_stats_request(self, start_time, end_time):
         url = self.endpoint + '/stats'
         payload = json.dumps(dict(
-            start_time=start_time,
-            end_time=end_time,
+            start=start_time,
+            end=end_time,
         ))
         return requests.post(url, data=payload, headers=self.JSON_HEADERS)
 
-    def get_stats_request(self, id):
-        url = "{0}/stats/{1}".format(self.endpoint, id)
+    def get_stats_request(self, stats_id):
+        url = "{0}/stats/{1}".format(self.endpoint, stats_id)
         return requests.get(url, headers=self.JSON_HEADERS)
 
-    def get_stats_summary(self, id):
-        url = "{0}/stats/{1}/summary".format(self.endpoint, id)
+    def get_stats_summary(self, stats_id):
+        url = "{0}/stats/{1}/summary".format(self.endpoint, stats_id)
         return requests.get(url, headers=self.JSON_HEADERS)
 
     def get_plot(self, stats_id, plot_type):
@@ -98,7 +119,8 @@ class DigaasClient(object):
         :param plot_type: either 'propagation' or 'query'
         """
         assert plot_type in ('propagation', 'query')
-        url = "{0}/stats/{1}/summary/{2}".format(self.endpoint, id, plot_type)
+        url = "{0}/stats/{1}/plots/{2}".format(
+            self.endpoint, stats_id, plot_type)
         return requests.get(url)
 
 
@@ -128,24 +150,7 @@ class DigaasBehaviors(object):
     def _debug_resp(self, resp):
         if resp.ok:
             return
-
-        # format the request
-        msg = "\n{0} {1}".format(resp.request.method, resp.request.url)
-        for k, v in resp.request.headers.items():
-            msg += "\n{0}: {1}".format(k, v)
-        if resp.request.body:
-            msg += "\n{0}".format(resp.request.body)
-        else:
-            msg += "\n<empty-body>"
-
-        msg += "\n"
-
-        # format the response
-        msg += "\n{0} {1}".format(resp.status_code, resp.reason)
-        for k, v in resp.headers.items():
-            msg += "\n{0}: {1}".format(k, v)
-        msg += "\n{0}".format(resp.text)
-        msg = "\n  ".join(msg.split('\n'))
+        msg = resp_to_string(resp)
         LOG.debug(msg)
 
     def observe_zone_create(self, resp, start_time, name=None):
@@ -246,60 +251,52 @@ class DigaasBehaviors(object):
             self._debug_resp(r)
 
 
-def fetch_stats(client, start_time, end_time, prop_output_file,
-                query_output_file, summary_output_file):
+def fetch_stats(client, start_time, end_time, stats):
     LOG.info("fetching stats from digaas")
     post_resp = client.post_stats_request(start_time, end_time)
     if not post_resp.ok:
-        LOG.error("error fetching stats: %s", post_resp)
+        LOG.error(" --- error fetching stats --- ")
+        LOG.error(resp_to_string(post_resp))
         return
     stats_id = post_resp.json()['id']
 
     # poll for COMPLETE
-    LOG.info("waiting for stats request %s to complete", stats_id)
+
     timeout = 300
     end_time = time.time() + timeout
+
+    LOG.info("waiting for stats request %s to complete (timeout=%s)", stats_id, timeout)
     while time.time() < end_time:
         # we must yield to other greenlets or this loop will block the world
         gevent.sleep(2)
-        resp = client.get_stats_request(id)
+        resp = client.get_stats_request(stats_id)
         if resp.ok and resp.json()['status'] == 'COMPLETE':
+            LOG.info("stats request %s completed", stats_id)
             break
-        elif not resp.ok or resp.json()['status'] == 'ERROR':
+        elif resp.ok and resp.json()['status'] == 'ERROR':
             LOG.error("Stats request ERRORed (id=%s)", stats_id)
+            LOG.error(resp_to_string(resp))
             return
 
+    LOG.info("Saving summary stats and plots")
+
     def save_as(resp, filename):
-        output_path = os.path.join(persistence.images_dir, filename)
+        LOG.info("Saving %s", filename)
+        if not resp.ok:
+            LOG.error("Failed fetching %s: Bad response %s", filename, resp)
+            return
+        output_path = os.path.join(persistence.persistence_dir, filename)
         output_path = os.path.abspath(output_path)
-        LOG.debug("writing to file %s" % output_path)
         with open(output_path, 'wb') as f:
-            shutil.copyfileobj(image_resp.raw, f)
-
-
+            f.write(resp.content)
 
     summary = client.get_stats_summary(stats_id)
     prop = client.get_plot(stats_id, client.PROPAGATION_PLOT)
-    if prop.ok:
-        save_as(prop, "
     query = client.get_plot(stats_id, client.QUERY_PLOT)
 
-
-        LOG.info(str(resp))
-        if resp.ok:
-            LOG.info("stats request suceeded")
-            LOG.info(str(resp.text))
-            image_id = resp.json()['image_id']
-            LOG.info("image_id = %s", image_id)
-            image_resp = client.get_image(image_id)
-            LOG.info("writing to file %s", output_filename)
-            # save all images to the images directory
-            output_path = os.path.join(persistence.images_dir, output_filename)
-            output_path = os.path.abspath(output_path)
-            print "writing to file %s" % output_path
-            with open(output_path, 'wb') as f:
-                shutil.copyfileobj(image_resp.raw, f)
-            break
+    save_as(summary, stats['digaas']['summary_stats'])
+    save_as(prop, stats['digaas']['propagation_plot'])
+    save_as(query, stats['digaas']['query_plot'])
 
 
 def persist_digaas_data(stats, digaas_client):
@@ -314,23 +311,14 @@ def persist_digaas_data(stats, digaas_client):
     """
     start_time = int(stats['start_time'])
     end_time = int(stats['last_request_timestamp'] + 1)
-    LOG.info("start_time = %s, end_time = %s", start_time, end_time)
-    propagation_plot = "propagation_plot{0}.png".format(start_time)
-    query_plot = "query_plot{0}.png".format(start_time)
-    summary_stats = "summary_stats{0}.json".format(start_time)
-    LOG.info("plot_filename = %s", plot_filename)
-
-    gevent.spawn(
-        fetch_stats, digaas_client, start_time, end_time,
-        propagation_plot,
-        query_plot,
-        summary_stats,
-    )
-
 
     stats['digaas'] = {
-        'plot_file': plot_filename,
+        'propagation_plot': "propagation_plot{0}.png".format(start_time),
+        'query_plot': "query_plot{0}.png".format(start_time),
+        'summary_stats': "summary_stats{0}.json".format(start_time),
     }
+
+    gevent.spawn(fetch_stats, digaas_client, start_time, end_time, stats)
 
 
 def setup(digaas_client):
