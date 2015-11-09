@@ -16,7 +16,6 @@ import logging
 import json
 import os
 import requests
-import shutil
 import time
 
 import gevent
@@ -57,7 +56,8 @@ class DigaasClient(object):
     RECORD_UPDATE = 'RECORD_UPDATE'
     RECORD_DELETE = 'RECORD_DELETE'
 
-    PROPAGATION_PLOT = 'propagation'
+    PROPAGATION_PLOT = 'propagation_by_type'
+    PROPAGATION_BY_NS_PLOT = 'propagation_by_nameserver'
     QUERY_PLOT = 'query'
 
     JSON_HEADERS = {
@@ -118,7 +118,6 @@ class DigaasClient(object):
         :param stats_id: the id of the stats request
         :param plot_type: either 'propagation' or 'query'
         """
-        assert plot_type in ('propagation', 'query')
         url = "{0}/stats/{1}/plots/{2}".format(
             self.endpoint, stats_id, plot_type)
         return requests.get(url)
@@ -265,7 +264,8 @@ def fetch_stats(client, start_time, end_time, stats):
     timeout = 300
     end_time = time.time() + timeout
 
-    LOG.info("waiting for stats request %s to complete (timeout=%s)", stats_id, timeout)
+    LOG.info("waiting for stats request %s to complete (timeout=%s)", stats_id,
+             timeout)
     while time.time() < end_time:
         # we must yield to other greenlets or this loop will block the world
         gevent.sleep(2)
@@ -292,10 +292,12 @@ def fetch_stats(client, start_time, end_time, stats):
 
     summary = client.get_stats_summary(stats_id)
     prop = client.get_plot(stats_id, client.PROPAGATION_PLOT)
+    prop_by_ns = client.get_plot(stats_id, client.PROPAGATION_BY_NS_PLOT)
     query = client.get_plot(stats_id, client.QUERY_PLOT)
 
     save_as(summary, stats['digaas']['summary_stats'])
     save_as(prop, stats['digaas']['propagation_plot'])
+    save_as(prop_by_ns, stats['digaas']['propagation_plot_by_nameserver'])
     save_as(query, stats['digaas']['query_plot'])
 
 
@@ -314,6 +316,8 @@ def persist_digaas_data(stats, digaas_client):
 
     stats['digaas'] = {
         'propagation_plot': "propagation_plot{0}.png".format(start_time),
+        'propagation_plot_by_nameserver':
+            "propagation_plot_by_nameserver{0}.png".format(start_time),
         'query_plot': "query_plot{0}.png".format(start_time),
         'summary_stats': "summary_stats{0}.json".format(start_time),
     }
