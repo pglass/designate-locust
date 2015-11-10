@@ -131,7 +131,7 @@ class ZoneTasks(BaseTaskSet):
                               catch_response=True) as post_resp:
 
             if CONFIG.use_digaas and post_resp.ok:
-                self.digaas_behaviors.check_zone_create_or_update(post_resp, start_time)
+                self.digaas_behaviors.observe_zone_create(post_resp, start_time)
 
             if not post_resp.ok:
                 post_resp.failure("Failed with status code %s" % post_resp.status_code)
@@ -153,7 +153,7 @@ class ZoneTasks(BaseTaskSet):
             resp = api_call()
             if resp.ok and resp.json()['status'] == 'ACTIVE':
                 zone = Zone(resp.json()['id'], resp.json()['name'])
-                LOG.info("%s -- Added zone %s", tenant, zone)
+                # LOG.info("%s -- Added zone %s", tenant, zone)
                 tenant.data.zones_for_delete.append(zone)
 
     def import_zone(self):
@@ -176,7 +176,7 @@ class ZoneTasks(BaseTaskSet):
                                 catch_response=True) as import_resp:
 
             if CONFIG.use_digaas and import_resp.ok:
-                self.digaas_behaviors.check_zone_create_or_update(
+                self.digaas_behaviors.observe_zone_create(
                     import_resp, start_time, name=zone_file.zone_name,
                 )
 
@@ -224,7 +224,7 @@ class ZoneTasks(BaseTaskSet):
                 catch_response=True) as patch_resp:
 
             if CONFIG.use_digaas and patch_resp.ok:
-                self.digaas_behaviors.check_zone_create_or_update(patch_resp, start_time)
+                self.digaas_behaviors.observe_zone_update(patch_resp, start_time)
 
             if not patch_resp.ok:
                 patch_resp.failure('Failure - got %s status code' % patch_resp.status_code)
@@ -265,7 +265,7 @@ class ZoneTasks(BaseTaskSet):
                 catch_response=True) as del_resp:
 
             if CONFIG.use_digaas and del_resp.ok:
-                self.digaas_behaviors.check_name_removed(zone.name, start_time)
+                self.digaas_behaviors.observe_zone_delete(zone.name, start_time)
 
             api_call = lambda: client.get_zone(
                 zone.id, catch_response=True,

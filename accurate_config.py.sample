@@ -22,6 +22,11 @@ graphite_port = None
 min_wait = 100
 max_wait = 1000
 
+n_zones_for_get_per_tenant = 10
+n_zones_for_delete_per_tenant = 10
+n_recordsets_for_get_per_tenant = 10
+n_recordsets_for_delete_per_tenant = 10
+
 # each entry in these tenant lists is (username, api_key)
 # if the api_key is set to None, the test will run in noauth mode
 large_tenants = [
@@ -37,12 +42,13 @@ assert not set(large_tenants).intersection(set(small_tenants))
 class Weights(object):
 
     def __init__(self, get_domain_by_id, get_domain_by_name, list_domain,
-                 export_domain, create_domain, modify_domain, remove_domain,
-                 list_records, get_record, create_record, remove_record,
-                 modify_record):
+                 import_zone, export_domain, create_domain, modify_domain,
+                 remove_domain, list_records, get_record, create_record,
+                 remove_record, modify_record):
         self.get_domain_by_id = get_domain_by_id
         self.get_domain_by_name = get_domain_by_name
         self.list_domain = list_domain
+        self.import_zone = import_zone
         self.export_domain = export_domain
         self.create_domain = create_domain
         self.modify_domain = modify_domain
@@ -60,6 +66,7 @@ large_weights = Weights(
     get_domain_by_id = 576,
     get_domain_by_name = 192,
     list_domain = 768,
+    import_zone = 60,
     export_domain = 0,
     create_domain = 120,
     modify_domain = 0,
@@ -77,6 +84,7 @@ small_weights = Weights(
     get_domain_by_id = 342,
     get_domain_by_name = 114,
     list_domain = 456,
+    import_zone = 240,
     export_domain = 60,
     create_domain = 1980,
     modify_domain = 600,
