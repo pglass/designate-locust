@@ -44,7 +44,8 @@ class DesignateClient(object):
         self._prepare_headers(kwargs)
 
         if self.tenant and self.tenant_id_in_url:
-            url = url.replace("v2", "v2/{0}".format(self.tenant.tenant_id))
+            if self.tenant.tenant_id not in url:
+                url = url.replace("v2", "v2/{0}".format(self.tenant.tenant_id))
 
         resp = method(url, *args, **kwargs)
         if not no_log_request:

@@ -36,13 +36,11 @@ def parse_args():
         help="Pass in the X-Auth-Project-ID header")
     p.add_argument("--no-https", action='store_true', help="Don't force https")
     p.add_argument("--no-munge-links", action="store_true",
-                   help="Don't manipulate the self links. This overrides of "
-                        "--no-tenant-id-in-url and --no-https")
+                   help="Don't manipulate the self links found in json.")
+
     return p.parse_args()
 
 def ensure_https(link, args):
-    if args.no_munge_links:
-        return link
     if not args.no_https and link.startswith('http:'):
         return link.replace('http:', 'https:', 1)
     return link
@@ -62,16 +60,11 @@ class TenantPrepper(object):
 
         print "%s has token %s" % (self.tenant.id, self.tenant.get_token())
 
-        if self.args.no_munge_links or self.args.no_tenant_id_in_url:
-            tenant_id_in_url = False
-        else:
-            tenant_id_in_url = True
-
         self.client = DesignateClient(
             client=HttpSession(self.args.endpoint),
             tenant=self.tenant,
             use_project_id=self.args.use_project_id_header,
-            tenant_id_in_url=tenant_id_in_url,
+            tenant_id_in_url=not self.args.no_tenant_id_in_url,
         )
 
     def run(self):
@@ -187,7 +180,7 @@ class TenantPrepper(object):
             links = resp.json()['links']
 
             if 'next' in links:
-                if self.args.endpoint.startswith('https:'):
+                if not self.args.no_munge_links and self.args.endpoint.startswith('https:'):
                     next_link = ensure_https(links['next'], self.args)
                 else:
                     next_link = links['next']
@@ -224,7 +217,7 @@ class TenantPrepper(object):
             links = resp.json()['links']
 
             if 'next' in links:
-                if self.args.endpoint.startswith('https:'):
+                if not self.args.no_munge_links and self.args.endpoint.startswith('https:'):
                     next_link = ensure_https(links['next'], self.args)
                 else:
                     next_link = links['next']
