@@ -23,9 +23,9 @@ def ensure_dir_exists(d):
 
 module_dir = os.path.dirname(os.path.realpath(__file__))
 stats_dir = os.path.join(module_dir, 'saved_stats')
-images_dir = os.path.join(module_dir, 'images')
+persistence_dir = os.path.join(module_dir, 'persisted_files')
+ensure_dir_exists(persistence_dir)
 ensure_dir_exists(stats_dir)
-ensure_dir_exists(images_dir)
 
 # Tracks the maximum number of users during load generation
 max_users = 0
