@@ -99,7 +99,7 @@ class ZoneTasks(BaseTaskSet):
                 post_resp, start_time, '/v2/zones/ID/tasks/export - async',
             ),
             failure_function=lambda msg: self.async_failure(
-                post_resp, start_time, '/v2/zones/ID/tasks/export - async',
+                post_resp, start_time, '/v2/zones/ID/tasks/export - async', msg
             ),
             expected='COMPLETE',
         )
@@ -177,30 +177,35 @@ class ZoneTasks(BaseTaskSet):
         client = self.designate_client.as_user(tenant)
         zone_file = random_zone_file()
         start_time = time.time()
-        with client.import_zone(data=zone_file.get_zone_file_text(),
-                                name='/v2/zones/tasks/imports',
-                                catch_response=True) as import_resp:
 
-            if CONFIG.use_digaas and import_resp.ok:
-                self.digaas_behaviors.observe_zone_create(
-                    import_resp, start_time, name=zone_file.zone_name,
-                )
+        import_resp = client.import_zone(
+            data=zone_file.get_zone_file_text(),
+            name='/v2/zones/tasks/imports',
+        )
 
-            if not import_resp.ok:
-                import_resp.failure("Failed with status code %s" % import_resp.status_code)
-                return
+        if not import_resp.ok:
+            return
+        if CONFIG.use_digaas:
+            self.digaas_behaviors.observe_zone_create(
+                import_resp, start_time, name=zone_file.zone_name,
+            )
 
-            api_call = lambda: client.get_zone_import(
-                import_id=import_resp.json()['id'],
-                name='/v2/zones/ID - status check')
+        api_call = lambda: client.get_zone_import(
+            import_id=import_resp.json()['id'],
+            name='/v2/zones/ID - status check')
 
-            self._poll_until_active_or_error(
-                api_call=api_call,
-                interval=interval,
-                status_function=lambda r: r.json()['status'],
-                success_function=lambda: self.async_success(start_time, import_resp),
-                failure_function=import_resp.failure,
-                expected='COMPLETE')
+        self._poll_until_active_or_error(
+            api_call=api_call,
+            interval=interval,
+            status_function=lambda r: r.json()['status'],
+            success_function=lambda: self.async_success(
+                import_resp, start_time, '/v2/zones/tasks/imports - async',
+            ),
+            failure_function=lambda msg: self.async_failure(
+                import_resp, start_time, '/v2/zones/tasks/imports - async', msg
+            ),
+            expected='COMPLETE',
+        )
 
     def modify_domain(self):
         """PATCH /zones/ID"""
