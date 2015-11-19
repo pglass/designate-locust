@@ -219,28 +219,30 @@ class ZoneTasks(BaseTaskSet):
                     "email": ("update@" + zone.name).strip('.'),
                     "ttl": random.randint(2400, 7200) }
         start_time = time.time()
-        with client.patch_zone(
-                zone.id,
-                data=json.dumps(payload),
-                name='/v2/zones/ID',
-                catch_response=True) as patch_resp:
+        patch_resp = client.patch_zone(
+            zone.id,
+            data=json.dumps(payload),
+            name='/v2/zones/ID',
+        )
+        if not patch_resp.ok:
+            return
+        if CONFIG.use_digaas:
+            self.digaas_behaviors.observe_zone_update(patch_resp, start_time)
 
-            if CONFIG.use_digaas and patch_resp.ok:
-                self.digaas_behaviors.observe_zone_update(patch_resp, start_time)
-
-            if not patch_resp.ok:
-                patch_resp.failure('Failure - got %s status code' % patch_resp.status_code)
-                return
-
-            api_call = lambda: client.get_zone(
-                zone_id=zone.id,
-                name='/v2/zones/ID - status check')
-            self._poll_until_active_or_error(
-                api_call=api_call,
-                interval=interval,
-                status_function=lambda r: r.json()['status'],
-                success_function=lambda: self.async_success(start_time, patch_resp),
-                failure_function=patch_resp.failure)
+        api_call = lambda: client.get_zone(
+            zone_id=zone.id,
+            name='/v2/zones/ID - status check')
+        self._poll_until_active_or_error(
+            api_call=api_call,
+            interval=interval,
+            status_function=lambda r: r.json()['status'],
+            success_function=lambda: self.async_success(
+                patch_resp, start_time, '/v2/zones - async'
+            ),
+            failure_function=lambda msg: self.async_failure(
+                patch_resp, start_time, '/v2/zones - async', msg
+            ),
+        )
 
     def remove_domain(self):
         """DELETE /zones/ID"""
