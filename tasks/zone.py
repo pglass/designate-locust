@@ -126,35 +126,37 @@ class ZoneTasks(BaseTaskSet):
         # the with block lets us specify when the request has succeeded.
         # this lets us time how long until an active or error status.
         start_time = time.time()
-        with client.post_zone(data=json.dumps(payload),
-                              name='/v2/zones',
-                              catch_response=True) as post_resp:
+        post_resp = client.post_zone(
+            data=json.dumps(payload), name='/v2/zones'
+        )
+        if not post_resp.ok:
+            return
+        if CONFIG.use_digaas:
+            self.digaas_behaviors.observe_zone_create(post_resp, start_time)
 
-            if CONFIG.use_digaas and post_resp.ok:
-                self.digaas_behaviors.observe_zone_create(post_resp, start_time)
+        api_call = lambda: client.get_zone(
+            zone_id=post_resp.json()['id'],
+            name='/v2/zones/ID - status check')
 
-            if not post_resp.ok:
-                post_resp.failure("Failed with status code %s" % post_resp.status_code)
-                return
+        self._poll_until_active_or_error(
+            api_call=api_call,
+            interval=interval,
+            status_function=lambda r: r.json()['status'],
+            success_function=lambda: self.async_success(
+                post_resp, start_time, '/v2/zones - async'
+            ),
+            failure_function=lambda msg: self.async_failure(
+                post_resp, start_time, '/v2/zones - async', msg
+            ),
+        )
 
-            api_call = lambda: client.get_zone(
-                zone_id=post_resp.json()['id'],
-                name='/v2/zones/ID - status check')
-
-            self._poll_until_active_or_error(
-                api_call=api_call,
-                interval=interval,
-                status_function=lambda r: r.json()['status'],
-                success_function=lambda: self.async_success(start_time, post_resp),
-                failure_function=post_resp.failure)
-
-            # if we successfully created the zone, add it to our list
-            # todo: add some domains to the delete list
-            resp = api_call()
-            if resp.ok and resp.json()['status'] == 'ACTIVE':
-                zone = Zone(resp.json()['id'], resp.json()['name'])
-                # LOG.info("%s -- Added zone %s", tenant, zone)
-                tenant.data.zones_for_delete.append(zone)
+        # if we successfully created the zone, add it to our list
+        # todo: add some domains to the delete list
+        resp = api_call()
+        if resp.ok and resp.json()['status'] == 'ACTIVE':
+            zone = Zone(resp.json()['id'], resp.json()['name'])
+            # LOG.info("%s -- Added zone %s", tenant, zone)
+            tenant.data.zones_for_delete.append(zone)
 
     def import_zone(self):
         """POST /zones/tasks/import, Content-type: text/dns"""

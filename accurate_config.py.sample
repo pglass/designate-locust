@@ -6,6 +6,7 @@ reset_stats = False
 
 designate_host = 'http://192.168.33.20:9001'
 auth_endpoint = 'https://192.168.33.20:5000'
+use_project_id = False
 tenant_id_in_url = False
 
 use_digaas = False

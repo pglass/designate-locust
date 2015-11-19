@@ -2,6 +2,7 @@ import time
 from collections import namedtuple
 
 from locust import TaskSet
+import locust.events
 import gevent
 
 import digaas_integration
@@ -16,6 +17,7 @@ class BaseTaskSet(TaskSet):
         super(BaseTaskSet, self).__init__(*args, **kwargs)
 
         self.designate_client = client.DesignateClient(self.client,
+            use_project_id=CONFIG.use_project_id,
             tenant_id_in_url=CONFIG.tenant_id_in_url)
 
         self.tenant_list = tenant_list
@@ -56,10 +58,22 @@ class BaseTaskSet(TaskSet):
                     return
             gevent.sleep(interval)
 
-    def async_success(self, start_time, resp_obj):
+    def async_success(self, resp, start_time, name):
         """When polling for an ACTIVE status, we want the response time to be
         the time until we saw the ACTIVE status. This is used to do that
         in combination with catch_response"""
-        response_time = int((time.time() - start_time) * 1000)
-        resp_obj.locust_request_meta['response_time'] = response_time
-        resp_obj.success()
+        locust.events.request_success.fire(
+            request_type=resp.request.method,
+            name=name,
+            response_time=int((time.time() - start_time) * 1000),
+            response_length=len(resp.content),
+
+        )
+
+    def async_failure(resp, start_time, name, message):
+        locust.events.request_failure.fire(
+            request_type=resp.request.method,
+            name=name,
+            response_time=int((time.time() - start_time) * 1000),
+            exception=Exception(message),
+        )
