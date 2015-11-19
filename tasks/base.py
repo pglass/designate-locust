@@ -57,6 +57,7 @@ class BaseTaskSet(TaskSet):
                     success_function()
                     return
             gevent.sleep(interval)
+        # TODO: call the failure function after timing out
 
     def async_success(self, resp, start_time, name):
         """When polling for an ACTIVE status, we want the response time to be

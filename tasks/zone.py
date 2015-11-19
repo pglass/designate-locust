@@ -263,18 +263,22 @@ class ZoneTasks(BaseTaskSet):
             return
 
         start_time = time.time()
-        with client.delete_zone(
-                zone.id,
-                name='/v2/zones/ID',
-                catch_response=True) as del_resp:
+        del_resp = client.delete_zone(zone.id, name='/v2/zones/ID')
 
-            if CONFIG.use_digaas and del_resp.ok:
-                self.digaas_behaviors.observe_zone_delete(zone.name, start_time)
+        if not del_resp.ok:
+            return
+        if CONFIG.use_digaas:
+            self.digaas_behaviors.observe_zone_delete(zone.name, start_time)
 
-            api_call = lambda: client.get_zone(
-                zone.id, catch_response=True,
-                name='/v2/zones/ID - status check',
-                no_log_request=True)
-            self._poll_until_404(api_call, interval,
-                success_function=lambda: self.async_success(start_time, del_resp),
-                failure_function=del_resp.failure)
+        api_call = lambda: client.get_zone(
+            zone.id, catch_response=True,
+            name='/v2/zones/ID - status check',
+            no_log_request=True)
+        self._poll_until_404(api_call, interval,
+            success_function=lambda: self.async_success(
+                del_resp, start_time, '/v2/zones - async',
+            ),
+            failure_function=lambda msg: self.async_failure(
+                del_resp, start_time, '/v2/zones - async', msg
+            ),
+        )
