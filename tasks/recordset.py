@@ -72,45 +72,48 @@ class RecordsetTasks(BaseTaskSet):
                     "records" : [ datagen.random_ip() ] }
 
         start_time = time.time()
-        with client.post_recordset(
-                zone.id,
-                data=json.dumps(payload),
-                name='/v2/zones/ID/recordsets',
-                catch_response=True) as post_resp:
-            client._log_if_bad_request(post_resp)
+        post_resp = client.post_recordset(
+            zone.id,
+            data=json.dumps(payload),
+            name='/v2/zones/ID/recordsets',
+        )
 
-            if CONFIG.use_digaas and post_resp.ok:
-                self.digaas_behaviors.observe_record_create(post_resp, start_time)
+        if not post_resp.ok:
+            return
 
-            if not post_resp.ok:
-                post_resp.failure("Failed with status code %s" % post_resp.status_code)
-                return
+        if CONFIG.use_digaas:
+            self.digaas_behaviors.observe_record_create(post_resp, start_time)
 
-            api_call = lambda: client.get_recordset(
-                zone_id=zone.id,
-                recordset_id=post_resp.json()['id'],
-                name='/v2/zones/ID/recordsets/ID - status check')
-            self._poll_until_active_or_error(
-                api_call=api_call,
-                interval=interval,
-                status_function=lambda r: r.json()['status'],
-                success_function=lambda: self.async_success(start_time, post_resp),
-                failure_function=post_resp.failure)
+        api_call = lambda: client.get_recordset(
+            zone_id=zone.id,
+            recordset_id=post_resp.json()['id'],
+            name='/v2/zones/ID/recordsets/ID - status check')
+        self._poll_until_active_or_error(
+            api_call=api_call,
+            interval=interval,
+            status_function=lambda r: r.json()['status'],
+            success_function=lambda: self.async_success(
+                post_resp, start_time, '/v2/zones/ID/recordsets - async',
+            ),
+            failure_function=lambda msg: self.async_failure(
+                post_resp, start_time, '/v2/zones/ID/recordsets - async', msg
+            ),
+        )
 
-            # if we successfully created the recordset, add it to our list
-            resp = api_call()
-            if resp.ok and resp.json()['status'] == 'ACTIVE':
-                recordset = Recordset(
-                    zone = zone,
-                    id = resp.json()['id'],
-                    data = resp.json()['records'][0],
-                    type = resp.json()['type'])
+        # if we successfully created the recordset, add it to our list
+        resp = api_call()
+        if resp.ok and resp.json()['status'] == 'ACTIVE':
+            recordset = Recordset(
+                zone = zone,
+                id = resp.json()['id'],
+                data = resp.json()['records'][0],
+                type = resp.json()['type'])
 
-                # add to the list of things for deleting, to help us not run
-                # out of zones to delete
-                LOG.info("%s -- Added recordset %s", tenant, recordset)
-                tenant.data.recordsets_for_delete.append(recordset)
-                LOG.info("have %s records", tenant.data.recordset_count())
+            # add to the list of things for deleting, to help us not run
+            # out of zones to delete
+            LOG.info("%s -- Added recordset %s", tenant, recordset)
+            tenant.data.recordsets_for_delete.append(recordset)
+            LOG.info("have %s records", tenant.data.recordset_count())
 
     def modify_record(self):
         gevent.spawn(
