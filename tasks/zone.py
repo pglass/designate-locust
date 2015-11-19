@@ -77,33 +77,37 @@ class ZoneTasks(BaseTaskSet):
 
         # this is asynchronous
         start_time = time.time()
-        with client.post_zone_export(zone.id,
-                                     name='/v2/zones/ID/tasks/export',
-                                     catch_response=True) as post_resp:
+        post_resp = client.post_zone_export(
+            zone.id,
+            name='/v2/zones/ID/tasks/export',
+        )
 
-            if not post_resp.ok:
-                post_resp.failure("Failed with status code %s" % post_resp.status_code)
-                return
+        if not post_resp.ok:
+            return
 
-            export_id = post_resp.json()['id']
-            api_call = lambda: client.get_zone_export(
-                export_id=export_id,
-                name='/v2/zones/tasks/exports/ID',
-            )
+        export_id = post_resp.json()['id']
+        api_call = lambda: client.get_zone_export(
+            export_id=export_id,
+            name='/v2/zones/tasks/exports/ID',
+        )
 
-            self._poll_until_active_or_error(
-                api_call=api_call,
-                interval=interval,
-                status_function=lambda r: r.json()['status'],
-                success_function=lambda: self.async_success(start_time, post_resp),
-                failure_function=post_resp.failure,
-                expected='COMPLETE',
-            )
+        self._poll_until_active_or_error(
+            api_call=api_call,
+            interval=interval,
+            status_function=lambda r: r.json()['status'],
+            success_function=lambda: self.async_success(
+                post_resp, start_time, '/v2/zones/ID/tasks/export - async',
+            ),
+            failure_function=lambda msg: self.async_failure(
+                post_resp, start_time, '/v2/zones/ID/tasks/export - async',
+            ),
+            expected='COMPLETE',
+        )
 
-            export_resp = client.get_exported_zone_file(
-                export_id=export_id,
-                name='/v2/zones/tasks/exports/ID/export',
-            )
+        export_resp = client.get_exported_zone_file(
+            export_id=export_id,
+            name='/v2/zones/tasks/exports/ID/export',
+        )
 
     def create_domain(self):
         """POST /zones"""
