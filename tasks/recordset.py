@@ -136,36 +136,33 @@ class RecordsetTasks(BaseTaskSet):
         payload = { "records": [ datagen.random_ip() ],
                     "ttl": random.randint(2400, 7200) }
         start_time = time.time()
-        with client.put_recordset(
-                recordset.zone.id,
-                recordset.id,
-                data=json.dumps(payload),
-                name="/v2/zones/ID/recordsets/ID",
-                catch_response=True) as put_resp:
+        put_resp = client.put_recordset(
+            recordset.zone.id,
+            recordset.id,
+            data=json.dumps(payload),
+            name="/v2/zones/ID/recordsets/ID",
+        )
 
-            if CONFIG.use_digaas and put_resp.ok:
-                self.digaas_behaviors.observe_record_update(put_resp, start_time)
+        if not put_resp.ok:
+            return
+        if CONFIG.use_digaas:
+            self.digaas_behaviors.observe_record_update(put_resp, start_time)
 
-            if not put_resp.ok:
-                put_resp.failure("Failed with status code %s" % put_resp.status_code)
-                LOG.error("Failed, update recordset response %s" % put_resp)
-                LOG.error("  %s %s", put_resp.request.method, put_resp.request.url)
-                LOG.error("  %s", put_resp.request.body)
-                LOG.error("  %s", put_resp.request.headers)
-                LOG.error("  %s", put_resp.headers)
-                LOG.error("  %s", put_resp.text)
-                return
-
-            api_call = lambda: client.get_recordset(
-                zone_id=put_resp.json()['zone_id'],
-                recordset_id=put_resp.json()['id'],
-                name='/v2/zones/ID/recordsets/ID - status check')
-            self._poll_until_active_or_error(
-                api_call=api_call,
-                interval=interval,
-                status_function=lambda r: r.json()['status'],
-                success_function=lambda: self.async_success(start_time, put_resp),
-                failure_function=put_resp.failure)
+        api_call = lambda: client.get_recordset(
+            zone_id=put_resp.json()['zone_id'],
+            recordset_id=put_resp.json()['id'],
+            name='/v2/zones/ID/recordsets/ID - status check')
+        self._poll_until_active_or_error(
+            api_call=api_call,
+            interval=interval,
+            status_function=lambda r: r.json()['status'],
+            success_function=lambda: self.async_success(
+                put_resp, start_time, '/v2/zones/ID/recordsets/ID - async',
+            ),
+            failure_function=lambda msg: self.async_failure(
+                put_resp, start_time, '/v2/zones/ID/recordsets/ID - async', msg
+            ),
+        )
 
     def remove_record(self):
         """DELETE /zones/ID/recordsets/ID"""
