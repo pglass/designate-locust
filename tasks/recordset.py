@@ -183,33 +183,36 @@ class RecordsetTasks(BaseTaskSet):
             return
 
         start_time = time.time()
-        with client.delete_recordset(
-                recordset.zone.id,
-                recordset.id,
-                name='/v2/zones/ID/recordsets/ID',
-                catch_response=True) as del_resp:
+        del_resp = client.delete_recordset(
+            recordset.zone.id,
+            recordset.id,
+            name='/v2/zones/ID/recordsets/ID',
+        )
 
-            if CONFIG.use_digaas and del_resp.ok:
-                self.digaas_behaviors.observe_record_delete(
-                    name=recordset.zone.name,
-                    rdata=recordset.data,
-                    rdatatype=recordset.type,
-                    start_time=start_time,
-                )
+        if not del_resp.ok:
+            return
+        if CONFIG.use_digaas:
+            self.digaas_behaviors.observe_record_delete(
+                name=recordset.zone.name,
+                rdata=recordset.data,
+                rdatatype=recordset.type,
+                start_time=start_time,
+            )
 
-            if not del_resp.ok:
-                del_resp.failure("Failed with status_code %s" % del_resp.status_code)
-                return
+        api_call = lambda: client.get_recordset(
+            recordset.zone.id,
+            recordset.id,
+            name='/v2/zones/ID/recordsets/ID - status check',
+            catch_response=True,
+            no_log_request=True)
 
-            api_call = lambda: client.get_recordset(
-                recordset.zone.id,
-                recordset.id,
-                name='/v2/zones/ID/recordsets/ID - status check',
-                catch_response=True,
-                no_log_request=True)
-
-            self._poll_until_404(
-                api_call=api_call,
-                interval=interval,
-                success_function=lambda: self.async_success(start_time, del_resp),
-                failure_function=del_resp.failure)
+        self._poll_until_404(
+            api_call=api_call,
+            interval=interval,
+            success_function=lambda: self.async_success(
+                del_resp, start_time, '/v2/zones/ID/recordsets/ID - async',
+            ),
+            failure_function=lambda msg: self.async_failure(
+                del_resp, start_time, '/v2/zones/ID/recordsets/ID - async', msg
+            ),
+        )
