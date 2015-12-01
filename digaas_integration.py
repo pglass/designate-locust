@@ -261,7 +261,7 @@ def fetch_stats(client, start_time, end_time, stats):
 
     # poll for COMPLETE
 
-    timeout = 300
+    timeout = 1800
     end_time = time.time() + timeout
 
     LOG.info("waiting for stats request %s to complete (timeout=%s)", stats_id,
