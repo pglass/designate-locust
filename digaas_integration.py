@@ -21,6 +21,7 @@ import time
 import gevent
 
 import persistence
+import accurate_config as CONFIG
 
 LOG = logging.getLogger(__name__)
 EPOCH_START = datetime.datetime(1970, 1, 1)
@@ -251,6 +252,11 @@ class DigaasBehaviors(object):
 
 
 def fetch_stats(client, start_time, end_time, stats):
+    if CONFIG.let_digaas_cooldown:
+        LOG.info("Waiting %s seconds for digaas to cool down",
+                 CONFIG.digaas_timeout)
+        gevent.sleep(CONFIG.digaas_timeout)
+
     LOG.info("fetching stats from digaas")
     post_resp = client.post_stats_request(start_time, end_time)
     if not post_resp.ok:
@@ -260,7 +266,6 @@ def fetch_stats(client, start_time, end_time, stats):
     stats_id = post_resp.json()['id']
 
     # poll for COMPLETE
-
     timeout = 1800
     end_time = time.time() + timeout
 

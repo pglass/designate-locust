@@ -16,6 +16,7 @@ nameservers = [
 ]
 digaas_timeout = 300
 digaas_interval = 10
+let_digaas_cooldown = True
 
 graphite_host = None
 graphite_port = None
