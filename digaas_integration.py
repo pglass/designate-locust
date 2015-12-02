@@ -15,9 +15,10 @@ import datetime
 import logging
 import json
 import os
-import requests
 import time
 
+import requests
+from requests.exceptions import RequestException
 import gevent
 
 import persistence
@@ -68,6 +69,20 @@ class DigaasClient(object):
 
     def __init__(self, endpoint):
         self.endpoint = endpoint.rstrip('/')
+
+    def ping_check(self):
+        try:
+            resp = requests.get(self.endpoint)
+            if not resp.ok:
+                LOG.error("Failed to connect to digaas")
+                LOG.error(resp_to_string(resp))
+                return False
+        except RequestException as e:
+            LOG.error("Failed to connect to digaas")
+            LOG.exception(e)
+            return False
+
+        return True
 
     def post_observer(self, name, nameserver, start_time, type, timeout,
                       interval, serial=None, rdata=None, rdatatype=None):
@@ -282,6 +297,9 @@ def fetch_stats(client, start_time, end_time, stats):
             LOG.error("Stats request ERRORed (id=%s)", stats_id)
             LOG.error(resp_to_string(resp))
             return
+        elif not resp.ok:
+            LOG.warning("Bad response from digaas")
+            LOG.warning(resp_to_string(resp))
 
     LOG.info("Saving summary stats and plots")
 
@@ -331,6 +349,8 @@ def persist_digaas_data(stats, digaas_client):
 
 
 def setup(digaas_client):
-    LOG.info("USING DIGaaS")
+    if digaas_client.ping_check():
+        LOG.info("USING DIGaaS")
+
     persistence.persisting_info += \
         lambda stats: persist_digaas_data(stats, digaas_client)
