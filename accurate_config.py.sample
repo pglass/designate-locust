@@ -93,9 +93,9 @@ small_weights = Weights(
     remove_domain = 720,
     list_records = 6984,
     get_record = 4656,
-    create_record = 180,
+    create_record = 380,
     modify_record = 60,
-    remove_record = 480,
+    remove_record = 280,
 
 )
 total_small_weight = small_weights.total()

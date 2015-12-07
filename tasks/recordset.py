@@ -179,7 +179,7 @@ class RecordsetTasks(BaseTaskSet):
         client = self.designate_client.as_user(tenant)
         recordset = tenant.data.pop_recordset_for_delete()
         if not recordset:
-            LOG.error("%s has no recordsets for updating", tenant)
+            LOG.error("%s has no recordsets for deleting", tenant)
             return
 
         start_time = time.time()
