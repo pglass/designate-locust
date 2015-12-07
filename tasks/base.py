@@ -11,6 +11,11 @@ import accurate_config as CONFIG
 from datagen import select_random_item
 
 
+class AsyncError(Exception):
+    def __init__(self, msg):
+        super(AsyncError, self).__init__(msg)
+
+
 class BaseTaskSet(TaskSet):
 
     def __init__(self, tenant_list, *args, **kwargs):
@@ -71,10 +76,10 @@ class BaseTaskSet(TaskSet):
 
         )
 
-    def async_failure(resp, start_time, name, message):
+    def async_failure(self, resp, start_time, name, message):
         locust.events.request_failure.fire(
             request_type=resp.request.method,
             name=name,
             response_time=int((time.time() - start_time) * 1000),
-            exception=Exception(message),
+            exception=AsyncError(message),
         )
