@@ -9,6 +9,10 @@ auth_endpoint = 'https://192.168.33.20:5000'
 use_project_id = False
 tenant_id_in_url = False
 
+# the interval and timeout when polling for ACTIVE/ERROR/404
+async_interval = 3
+async_timeout = 120
+
 use_digaas = False
 digaas_endpoint = 'http://localhost:9090'
 nameservers = [

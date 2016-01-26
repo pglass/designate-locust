@@ -60,12 +60,11 @@ class ZoneTasks(BaseTaskSet):
         """
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_export_domain(interval=2),
-            timeout=60
+            lambda: self._do_export_domain(),
         )
 
 
-    def _do_export_domain(self, interval):
+    def _do_export_domain(self):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -93,7 +92,6 @@ class ZoneTasks(BaseTaskSet):
 
         self._poll_until_active_or_error(
             api_call=api_call,
-            interval=interval,
             status_function=lambda r: r.json()['status'],
             success_function=lambda: self.async_success(
                 post_resp, start_time, '/v2/zones/ID/tasks/export - async',
@@ -113,11 +111,10 @@ class ZoneTasks(BaseTaskSet):
         """POST /zones"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_create_domain(interval=2),
-            timeout=60
+            lambda: self._do_create_domain(),
         )
 
-    def _do_create_domain(self, interval):
+    def _do_create_domain(self):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -144,7 +141,6 @@ class ZoneTasks(BaseTaskSet):
 
         self._poll_until_active_or_error(
             api_call=api_call,
-            interval=interval,
             status_function=lambda r: r.json()['status'],
             success_function=lambda: self.async_success(
                 post_resp, start_time, '/v2/zones - async'
@@ -166,11 +162,10 @@ class ZoneTasks(BaseTaskSet):
         """POST /zones/tasks/import, Content-type: text/dns"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_import_zone(interval=2),
-            timeout=120
+            lambda: self._do_import_zone(),
         )
 
-    def _do_import_zone(self, interval):
+    def _do_import_zone(self):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -196,7 +191,6 @@ class ZoneTasks(BaseTaskSet):
 
         self._poll_until_active_or_error(
             api_call=api_call,
-            interval=interval,
             status_function=lambda r: r.json()['status'],
             success_function=lambda: self.async_success(
                 import_resp, start_time, '/v2/zones/tasks/imports - async',
@@ -211,11 +205,10 @@ class ZoneTasks(BaseTaskSet):
         """PATCH /zones/ID"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_modify_domain(interval=2),
-            timeout=60
+            lambda: self._do_modify_domain(),
         )
 
-    def _do_modify_domain(self, interval):
+    def _do_modify_domain(self):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -243,7 +236,6 @@ class ZoneTasks(BaseTaskSet):
             name='/v2/zones/ID - status check')
         self._poll_until_active_or_error(
             api_call=api_call,
-            interval=interval,
             status_function=lambda r: r.json()['status'],
             success_function=lambda: self.async_success(
                 patch_resp, start_time, '/v2/zones - async'
@@ -257,11 +249,10 @@ class ZoneTasks(BaseTaskSet):
         """DELETE /zones/ID"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_remove_domain(interval=2),
-            timeout=60
+            lambda: self._do_remove_domain(),
         )
 
-    def _do_remove_domain(self, interval):
+    def _do_remove_domain(self):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -283,7 +274,8 @@ class ZoneTasks(BaseTaskSet):
             zone.id, catch_response=True,
             name='/v2/zones/ID - status check',
             no_log_request=True)
-        self._poll_until_404(api_call, interval,
+        self._poll_until_404(
+            api_call,
             success_function=lambda: self.async_success(
                 del_resp, start_time, '/v2/zones - async',
             ),

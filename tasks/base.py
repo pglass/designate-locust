@@ -34,26 +34,28 @@ class BaseTaskSet(TaskSet):
     def select_random_tenant(self):
         return select_random_item(self.tenant_list)
 
-    def _poll_until_active_or_error(self, api_call, interval,
-                                    status_function, success_function,
-                                    failure_function, expected='ACTIVE'):
-        # NOTE: this is assumed to be run in a separate greenlet. We use
-        # `while True` here, and use gevent to manage a timeout externally
-        while True:
+    def _poll_until_active_or_error(self, api_call, status_function,
+                                    success_function, failure_function,
+                                    expected='ACTIVE',
+                                    interval=CONFIG.async_interval,
+                                    timeout=CONFIG.async_timeout):
+        end_time = time.time() + timeout
+        while time.time() < end_time:
             resp = api_call()
             if resp.ok and status_function(resp) == expected:
                 success_function()
-                break
+                return
             elif resp.ok and status_function(resp) == 'ERROR':
                 failure_function("Failed - saw ERROR status")
-                break
+                return
             gevent.sleep(interval)
+        failure_function("Failed - timed out after %s seconds" % timeout)
 
-    def _poll_until_404(self, api_call, interval, success_function,
-                        failure_function):
-        # NOTE: this is assumed to be run in a separate greenlet. We use
-        # `while True` here, and use gevent to manage a timeout externally
-        while True:
+    def _poll_until_404(self, api_call, success_function, failure_function,
+                        interval=CONFIG.async_interval,
+                        timeout=CONFIG.async_timeout):
+        end_time = time.time() + timeout
+        while time.time() < end_time:
             with api_call() as resp:
                 if resp.status_code == 404:
                     # ensure the 404 isn't marked as a failure in the report
@@ -62,7 +64,7 @@ class BaseTaskSet(TaskSet):
                     success_function()
                     return
             gevent.sleep(interval)
-        # TODO: call the failure function after timing out
+        failure_function("Failed - timed out afer %s seconds" % timeout)
 
     def async_success(self, resp, start_time, name):
         """When polling for an ACTIVE status, we want the response time to be
