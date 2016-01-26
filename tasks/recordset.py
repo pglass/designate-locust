@@ -81,7 +81,19 @@ class RecordsetTasks(BaseTaskSet):
             return
 
         if CONFIG.use_digaas:
-            self.digaas_behaviors.observe_record_create(post_resp, start_time)
+            # we need the zone's serial to confidently poll for the update.
+            # the recordset doesn't have the serial. instead, grab the zone
+            # and use whatever serial we get. this is not perfect - digaas may
+            # record slightly longer propagation times than actual.
+            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            if not get_zone.ok:
+                LOG.error(
+                    "Failed to fetch zone %s to grab serial. We need the "
+                    "serial for digaas to poll for the recordset create",
+                    zone.id
+                )
+            else:
+                self.digaas_behaviors.observe_zone_update(get_zone, start_time)
 
         api_call = lambda: client.get_recordset(
             zone_id=zone.id,
@@ -143,7 +155,15 @@ class RecordsetTasks(BaseTaskSet):
         if not put_resp.ok:
             return
         if CONFIG.use_digaas:
-            self.digaas_behaviors.observe_record_update(put_resp, start_time)
+            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            if not get_zone.ok:
+                LOG.error(
+                    "Failed to fetch zone %s to grab serial. We need the "
+                    "serial for digaas to poll for the recordset update",
+                    zone.id
+                )
+            else:
+                self.digaas_behaviors.observe_zone_update(get_zone, start_time)
 
         api_call = lambda: client.get_recordset(
             zone_id=put_resp.json()['zone_id'],
@@ -187,12 +207,15 @@ class RecordsetTasks(BaseTaskSet):
         if not del_resp.ok:
             return
         if CONFIG.use_digaas:
-            self.digaas_behaviors.observe_record_delete(
-                name=recordset.zone.name,
-                rdata=recordset.data,
-                rdatatype=recordset.type,
-                start_time=start_time,
-            )
+            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            if not get_zone.ok:
+                LOG.error(
+                    "Failed to fetch zone %s to grab serial. We need the "
+                    "serial for digaas to poll for the recordset create",
+                    zone.id
+                )
+            else:
+                self.digaas_behaviors.observe_zone_update(get_zone, start_time)
 
         api_call = lambda: client.get_recordset(
             recordset.zone.id,
