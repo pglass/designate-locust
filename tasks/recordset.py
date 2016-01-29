@@ -51,11 +51,10 @@ class RecordsetTasks(BaseTaskSet):
         """POST /zones/ID/recordsets"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_create_record(interval=2),
-            timeout=60
+            lambda: self._do_create_record(),
         )
 
-    def _do_create_record(self, interval):
+    def _do_create_record(self):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -82,7 +81,19 @@ class RecordsetTasks(BaseTaskSet):
             return
 
         if CONFIG.use_digaas:
-            self.digaas_behaviors.observe_record_create(post_resp, start_time)
+            # we need the zone's serial to confidently poll for the update.
+            # the recordset doesn't have the serial. instead, grab the zone
+            # and use whatever serial we get. this is not perfect - digaas may
+            # record slightly longer propagation times than actual.
+            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            if not get_zone.ok:
+                LOG.error(
+                    "Failed to fetch zone %s to grab serial. We need the "
+                    "serial for digaas to poll for the recordset create",
+                    zone.id
+                )
+            else:
+                self.digaas_behaviors.observe_zone_update(get_zone, start_time)
 
         api_call = lambda: client.get_recordset(
             zone_id=zone.id,
@@ -90,7 +101,6 @@ class RecordsetTasks(BaseTaskSet):
             name='/v2/zones/ID/recordsets/ID - status check')
         self._poll_until_active_or_error(
             api_call=api_call,
-            interval=interval,
             status_function=lambda r: r.json()['status'],
             success_function=lambda: self.async_success(
                 post_resp, start_time, '/v2/zones/ID/recordsets - async',
@@ -118,11 +128,10 @@ class RecordsetTasks(BaseTaskSet):
     def modify_record(self):
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_modify_record(interval=2),
-            timeout=60
+            lambda: self._do_modify_record(),
         )
 
-    def _do_modify_record(self, interval):
+    def _do_modify_record(self):
         """PATCH /zones/ID/recordsets/ID"""
         tenant = self.select_random_tenant()
         if not tenant:
@@ -146,7 +155,15 @@ class RecordsetTasks(BaseTaskSet):
         if not put_resp.ok:
             return
         if CONFIG.use_digaas:
-            self.digaas_behaviors.observe_record_update(put_resp, start_time)
+            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            if not get_zone.ok:
+                LOG.error(
+                    "Failed to fetch zone %s to grab serial. We need the "
+                    "serial for digaas to poll for the recordset update",
+                    zone.id
+                )
+            else:
+                self.digaas_behaviors.observe_zone_update(get_zone, start_time)
 
         api_call = lambda: client.get_recordset(
             zone_id=put_resp.json()['zone_id'],
@@ -154,7 +171,6 @@ class RecordsetTasks(BaseTaskSet):
             name='/v2/zones/ID/recordsets/ID - status check')
         self._poll_until_active_or_error(
             api_call=api_call,
-            interval=interval,
             status_function=lambda r: r.json()['status'],
             success_function=lambda: self.async_success(
                 put_resp, start_time, '/v2/zones/ID/recordsets/ID - async',
@@ -168,11 +184,10 @@ class RecordsetTasks(BaseTaskSet):
         """DELETE /zones/ID/recordsets/ID"""
         gevent.spawn(
             GreenletManager.get().tracked_greenlet,
-            lambda: self._do_remove_record(interval=2),
-            timeout=60
+            lambda: self._do_remove_record(),
         )
 
-    def _do_remove_record(self, interval):
+    def _do_remove_record(self):
         tenant = self.select_random_tenant()
         if not tenant:
             return
@@ -192,12 +207,15 @@ class RecordsetTasks(BaseTaskSet):
         if not del_resp.ok:
             return
         if CONFIG.use_digaas:
-            self.digaas_behaviors.observe_record_delete(
-                name=recordset.zone.name,
-                rdata=recordset.data,
-                rdatatype=recordset.type,
-                start_time=start_time,
-            )
+            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            if not get_zone.ok:
+                LOG.error(
+                    "Failed to fetch zone %s to grab serial. We need the "
+                    "serial for digaas to poll for the recordset create",
+                    zone.id
+                )
+            else:
+                self.digaas_behaviors.observe_zone_update(get_zone, start_time)
 
         api_call = lambda: client.get_recordset(
             recordset.zone.id,
@@ -208,7 +226,6 @@ class RecordsetTasks(BaseTaskSet):
 
         self._poll_until_404(
             api_call=api_call,
-            interval=interval,
             success_function=lambda: self.async_success(
                 del_resp, start_time, '/v2/zones/ID/recordsets/ID - async',
             ),
