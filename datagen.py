@@ -37,6 +37,7 @@ class RandomZoneFile(object):
     def __str__(self):
         result = ""
         result += "$ORIGIN %s\n" % self.zone_name
+        result += "$TTL 300\n"
         result += "\n"
         result += "@ IN SOA ns.{0} {1} 100 101 102 103 104\n".format(self.zone_name, self.email)
         result += "@ IN NS ns.%s\n" % self.zone_name
