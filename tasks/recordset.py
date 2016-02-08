@@ -155,7 +155,7 @@ class RecordsetTasks(BaseTaskSet):
         if not put_resp.ok:
             return
         if CONFIG.use_digaas:
-            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            get_zone = client.get_zone(recordset.zone.id, name='/v2/zones/ID')
             if not get_zone.ok:
                 LOG.error(
                     "Failed to fetch zone %s to grab serial. We need the "
@@ -207,7 +207,7 @@ class RecordsetTasks(BaseTaskSet):
         if not del_resp.ok:
             return
         if CONFIG.use_digaas:
-            get_zone = client.get_zone(zone.id, name='/v2/zones/ID')
+            get_zone = client.get_zone(recordset.zone.id, name='/v2/zones/ID')
             if not get_zone.ok:
                 LOG.error(
                     "Failed to fetch zone %s to grab serial. We need the "
