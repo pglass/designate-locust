@@ -1,3 +1,4 @@
+import sys
 import time
 from collections import namedtuple
 
@@ -34,20 +35,28 @@ class BaseTaskSet(TaskSet):
     def select_random_tenant(self):
         return select_random_item(self.tenant_list)
 
+    COUNT = 0
+
     def _poll_until_active_or_error(self, api_call, status_function,
                                     success_function, failure_function,
                                     expected='ACTIVE',
                                     interval=CONFIG.async_interval,
                                     timeout=CONFIG.async_timeout):
+        start = time.time()
         end_time = time.time() + timeout
         while time.time() < end_time:
-            resp = api_call()
-            if resp.ok and status_function(resp) == expected:
-                success_function()
-                return
-            elif resp.ok and status_function(resp) == 'ERROR':
-                failure_function("Failed - saw ERROR status")
-                return
+            try:
+                resp = api_call()
+                if resp.ok and status_function(resp) == expected:
+                    success_function()
+                    return
+                elif resp.ok and status_function(resp) == 'ERROR':
+                    failure_function("Failed - saw ERROR status")
+                    return
+            except Exception as e:
+                locust.events.locust_error.fire(
+                    locust_instance=self, exception=e, tb=sys.exc_info()[2]
+                )
             gevent.sleep(interval)
         failure_function("Failed - timed out after %s seconds" % timeout)
 
@@ -56,13 +65,18 @@ class BaseTaskSet(TaskSet):
                         timeout=CONFIG.async_timeout):
         end_time = time.time() + timeout
         while time.time() < end_time:
-            with api_call() as resp:
-                if resp.status_code == 404:
-                    # ensure the 404 isn't marked as a failure in the report
-                    resp.success()
-                    # mark the original (delete) request as a success
-                    success_function()
-                    return
+            try:
+                with api_call() as resp:
+                    if resp.status_code == 404:
+                        # ensure the 404 isn't marked as a failure in the report
+                        resp.success()
+                        # mark the original (delete) request as a success
+                        success_function()
+                        return
+            except Exception as e:
+                locust.events.locust_error.fire(
+                    locust_instance=self, exception=e, tb=sys.exc_info()[2]
+                )
             gevent.sleep(interval)
         failure_function("Failed - timed out afer %s seconds" % timeout)
 
