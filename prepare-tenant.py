@@ -34,16 +34,11 @@ def parse_args():
         help="Don't put the tenant id in the url")
     p.add_argument("--use-project-id-header", action='store_true',
         help="Pass in the X-Auth-Project-ID header")
-    p.add_argument("--no-https", action='store_true', help="Don't force https")
-    p.add_argument("--no-munge-links", action="store_true",
-                   help="Don't manipulate the self links found in json.")
+    p.add_argument("--no-repose", action="store_true",
+                   help="Run against designate in noauth mode")
 
     return p.parse_args()
 
-def ensure_https(link, args):
-    if not args.no_https and link.startswith('http:'):
-        return link.replace('http:', 'https:', 1)
-    return link
 
 class TenantPrepper(object):
 
@@ -63,8 +58,8 @@ class TenantPrepper(object):
         self.client = DesignateClient(
             client=HttpSession(self.args.endpoint),
             tenant=self.tenant,
-            use_project_id=self.args.use_project_id_header,
-            tenant_id_in_url=not self.args.no_tenant_id_in_url,
+            use_project_id=self.args.no_repose,
+            tenant_id_in_url=not self.args.no_repose,
         )
 
     def run(self):
@@ -180,10 +175,7 @@ class TenantPrepper(object):
             links = resp.json()['links']
 
             if 'next' in links:
-                if not self.args.no_munge_links and self.args.endpoint.startswith('https:'):
-                    next_link = ensure_https(links['next'], self.args)
-                else:
-                    next_link = links['next']
+                next_link = links['next']
                 frontier.add_zone_link(next_link, tenant)
 
             for z in zones:
@@ -217,10 +209,7 @@ class TenantPrepper(object):
             links = resp.json()['links']
 
             if 'next' in links:
-                if not self.args.no_munge_links and self.args.endpoint.startswith('https:'):
-                    next_link = ensure_https(links['next'], self.args)
-                else:
-                    next_link = links['next']
+                next_link = links['next']
                 frontier.add_recordset_link(zone, next_link, tenant)
 
             for r in recordsets:
