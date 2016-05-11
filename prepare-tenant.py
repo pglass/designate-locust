@@ -226,7 +226,28 @@ class TenantPrepper(object):
 
 def check_resp(resp):
     if not resp.ok:
-        raise Exception("Bad response! %s - %s %s" % (resp, resp.request.url, resp.text))
+        raise Exception("Bad response!\n%s" % resp_to_string(resp))
+
+
+def resp_to_string(resp):
+    # format the request
+    msg = "\n{0} {1}".format(resp.request.method, resp.request.url)
+    for k, v in resp.request.headers.items():
+        msg += "\n{0}: {1}".format(k, v)
+    if resp.request.body:
+        msg += "\n{0}".format(resp.request.body)
+    else:
+        msg += "\n<empty-body>"
+
+    msg += "\n"
+
+    # format the response
+    msg += "\n{0} {1}".format(resp.status_code, resp.reason)
+    for k, v in resp.headers.items():
+        msg += "\n{0}: {1}".format(k, v)
+    msg += "\n{0}".format(resp.text)
+    msg = "\n  ".join(msg.split('\n'))
+    return msg
 
 
 if __name__ == '__main__':
