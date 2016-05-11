@@ -47,9 +47,10 @@ assert not set(large_tenants).intersection(set(small_tenants))
 class Weights(object):
 
     def __init__(self, get_domain_by_id, get_domain_by_name, list_domain,
-                 import_zone, export_domain, create_domain, modify_domain,
-                 remove_domain, list_records, get_record, create_record,
-                 remove_record, modify_record):
+                 export_domain, create_domain, modify_domain, remove_domain,
+                 list_records, get_record, create_record, remove_record,
+                 modify_record, import_zone, list_recordsets_cross_zone,
+                 filter_recordsets_by_data, get_recordset_cross_zone):
         self.get_domain_by_id = get_domain_by_id
         self.get_domain_by_name = get_domain_by_name
         self.list_domain = list_domain
@@ -63,6 +64,9 @@ class Weights(object):
         self.create_record = create_record
         self.remove_record = remove_record
         self.modify_record = modify_record
+        self.list_recordsets_cross_zone = list_recordsets_cross_zone
+        self.get_recordset_cross_zone = get_recordset_cross_zone
+        self.filter_recordsets_by_data = filter_recordsets_by_data
 
     def total(self):
         return sum(self.__dict__.itervalues())
@@ -81,7 +85,9 @@ large_weights = Weights(
     create_record = 1560,
     modify_record = 600,
     remove_record = 300,
-
+    list_recordsets_cross_zone  = 1,
+    filter_recordsets_by_data   = 1,
+    get_recordset_cross_zone    = 1,
 )
 total_large_weight = large_weights.total()
 
@@ -94,11 +100,13 @@ small_weights = Weights(
     create_domain = 1980,
     modify_domain = 600,
     remove_domain = 720,
-    list_records = 6984,
-    get_record = 4656,
+    list_records = 2500,
+    get_record = 3500,
     create_record = 380,
     modify_record = 60,
     remove_record = 280,
-
+    list_recordsets_cross_zone  = 2500,
+    filter_recordsets_by_data   = 2000,
+    get_recordset_cross_zone    = 1000,
 )
 total_small_weight = small_weights.total()

@@ -85,6 +85,9 @@ class LargeTasks(ZoneTasks, RecordsetTasks):
         RecordsetTasks.create_record: CONFIG.large_weights.create_record,
         RecordsetTasks.remove_record: CONFIG.large_weights.remove_record,
         RecordsetTasks.modify_record: CONFIG.large_weights.modify_record,
+        RecordsetTasks.list_recordsets_cross_zone:  CONFIG.large_weights.list_recordsets_cross_zone,
+        RecordsetTasks.get_recordset_cross_zone:    CONFIG.large_weights.get_recordset_cross_zone,
+        RecordsetTasks.filter_recordsets_by_data:   CONFIG.large_weights.filter_recordsets_by_data,
     }
 
     def __init__(self, *args, **kwargs):
@@ -110,6 +113,9 @@ class SmallTasks(ZoneTasks, RecordsetTasks):
         RecordsetTasks.create_record: CONFIG.small_weights.create_record,
         RecordsetTasks.remove_record: CONFIG.small_weights.remove_record,
         RecordsetTasks.modify_record: CONFIG.small_weights.modify_record,
+        RecordsetTasks.list_recordsets_cross_zone:  CONFIG.small_weights.list_recordsets_cross_zone,
+        RecordsetTasks.get_recordset_cross_zone:    CONFIG.small_weights.get_recordset_cross_zone,
+        RecordsetTasks.filter_recordsets_by_data:   CONFIG.small_weights.filter_recordsets_by_data,
     }
 
     def __init__(self, *args, **kwargs):

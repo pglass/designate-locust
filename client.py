@@ -173,6 +173,17 @@ class DesignateClient(object):
         return self._request(self.client.delete, url, *args, **kwargs)
 
     #############################################
+    # Cross zone recordset calls
+    #############################################
+    def list_recordsets_cross_zone(self, *args, **kwargs):
+        url = "/v2/recordsets"
+        return self._request(self.client.get, url, *args, **kwargs)
+
+    def get_recordset_cross_zone(self, recordset_id, *args, **kwargs):
+        url = "/v2/recordsets/{}".format(recordset_id)
+        return self._request(self.client.get, url, *args, **kwargs)
+
+    #############################################
     # Proxy methods for raw http requests
     #############################################
     def get(self, *args, **kwargs):

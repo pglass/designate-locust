@@ -18,6 +18,38 @@ LOG = logging.getLogger(__name__)
 
 class RecordsetTasks(BaseTaskSet):
 
+    def list_recordsets_cross_zone(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+        client.list_recordsets_cross_zone(
+            name="/v2/recordsets")
+
+    def get_recordset_cross_zone(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+        recordset = tenant.data.select_recordset_for_get()
+        if not recordset:
+            return
+        client.get_recordset_cross_zone(
+            recordset.id,
+            name="/v2/recordsets/ID")
+
+    def filter_recordsets_by_data(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+
+        # use a filter like `data=*1*` but randomize the number
+        n = random.randrange(0, 10)
+        client.list_recordsets_cross_zone(
+            params={'data': "*%s*" % n},
+            name="/v2/recordsets?data=")
+
     def list_records(self):
         """GET /zones/ID/recordsets"""
         tenant = self.select_random_tenant()
