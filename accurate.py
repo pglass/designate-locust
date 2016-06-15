@@ -91,6 +91,9 @@ class LargeTasks(ZoneTasks, RecordsetTasks):
         ZoneTasks.filter_domains_by_name_left_wildcard:   CONFIG.large_weights.filter_domains_by_name_left_wildcard,
         ZoneTasks.filter_domains_by_name_right_wildcard:  CONFIG.large_weights.filter_domains_by_name_right_wildcard,
         ZoneTasks.filter_domains_by_name_double_wildcard: CONFIG.large_weights.filter_domains_by_name_double_wildcard,
+        RecordsetTasks.filter_recordsets_by_name_left_wildcard:   CONFIG.large_weights.filter_recordsets_by_name_left_wildcard,
+        RecordsetTasks.filter_recordsets_by_name_right_wildcard:  CONFIG.large_weights.filter_recordsets_by_name_right_wildcard,
+        RecordsetTasks.filter_recordsets_by_name_double_wildcard: CONFIG.large_weights.filter_recordsets_by_name_double_wildcard,
     }
 
     def __init__(self, *args, **kwargs):
@@ -122,6 +125,9 @@ class SmallTasks(ZoneTasks, RecordsetTasks):
         ZoneTasks.filter_domains_by_name_left_wildcard:   CONFIG.small_weights.filter_domains_by_name_left_wildcard,
         ZoneTasks.filter_domains_by_name_right_wildcard:  CONFIG.small_weights.filter_domains_by_name_right_wildcard,
         ZoneTasks.filter_domains_by_name_double_wildcard: CONFIG.small_weights.filter_domains_by_name_double_wildcard,
+        RecordsetTasks.filter_recordsets_by_name_left_wildcard:   CONFIG.small_weights.filter_recordsets_by_name_left_wildcard,
+        RecordsetTasks.filter_recordsets_by_name_right_wildcard:  CONFIG.small_weights.filter_recordsets_by_name_right_wildcard,
+        RecordsetTasks.filter_recordsets_by_name_double_wildcard: CONFIG.small_weights.filter_recordsets_by_name_double_wildcard,
     }
 
     def __init__(self, *args, **kwargs):

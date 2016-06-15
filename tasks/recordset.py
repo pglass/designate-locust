@@ -64,6 +64,54 @@ class RecordsetTasks(BaseTaskSet):
             recordset.zone.id,
             name='/v2/zones/ID/recordsets')
 
+    def filter_recordsets_by_name_left_wildcard(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+
+        zone = tenant.data.select_zone_for_get()
+        if zone is None:
+            LOG.warning("don't know of any zones to list recordsets with")
+            return
+
+        client.list_recordsets(
+            zone.id,
+            params={'name': '*.com.'},
+            name='/v2/zones/ID/recordsets?name=')
+
+    def filter_recordsets_by_name_right_wildcard(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+
+        zone = tenant.data.select_zone_for_get()
+        if zone is None:
+            LOG.warning("don't know of any zones to list recordsets with")
+            return
+
+        client.list_recordsets(
+            zone.id,
+            params={'name': 'record*'},
+            name='/v2/zones/ID/recordsets?name=record*')
+
+    def filter_recordsets_by_name_double_wildcard(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+
+        zone = tenant.data.select_zone_for_get()
+        if zone is None:
+            LOG.warning("don't know of any zones to list recordsets with")
+            return
+
+        client.list_recordsets(
+            zone.id,
+            params={'name': '*zone*'},
+            name='/v2/zones/ID/recordsets?name=*zone*')
+
     def get_record(self):
         """GET /zones/ID/recordsets/ID"""
         tenant = self.select_random_tenant()
