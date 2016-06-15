@@ -50,7 +50,10 @@ class Weights(object):
                  export_domain, create_domain, modify_domain, remove_domain,
                  list_records, get_record, create_record, remove_record,
                  modify_record, import_zone, list_recordsets_cross_zone,
-                 filter_recordsets_by_data, get_recordset_cross_zone):
+                 filter_recordsets_by_data, get_recordset_cross_zone,
+                 filter_zones_by_name_left_wildcard,
+                 filter_zones_by_name_right_wildcard,
+                 filter_zones_by_name_double_wildcard):
         self.get_domain_by_id = get_domain_by_id
         self.get_domain_by_name = get_domain_by_name
         self.list_domain = list_domain
@@ -88,6 +91,9 @@ large_weights = Weights(
     list_recordsets_cross_zone  = 1,
     filter_recordsets_by_data   = 1,
     get_recordset_cross_zone    = 1,
+    filter_zones_by_name_left_wildcard = 1,
+    filter_zones_by_name_right_wildcard = 1,
+    filter_zones_by_name_double_wildcard = 1,
 )
 total_large_weight = large_weights.total()
 
@@ -108,5 +114,8 @@ small_weights = Weights(
     list_recordsets_cross_zone  = 2500,
     filter_recordsets_by_data   = 2000,
     get_recordset_cross_zone    = 1000,
+    filter_zones_by_name_left_wildcard = 1,
+    filter_zones_by_name_right_wildcard = 1,
+    filter_zones_by_name_double_wildcard = 1,
 )
 total_small_weight = small_weights.total()

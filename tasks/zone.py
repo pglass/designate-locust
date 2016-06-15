@@ -51,6 +51,34 @@ class ZoneTasks(BaseTaskSet):
         client = self.designate_client.as_user(tenant)
         client.list_zones(name='/v2/zones')
 
+    def filter_domains_by_name_left_wildcard(self):
+        """GET /zones?name=*.com"""
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+        client.list_zones(
+            params={'name': '*.com.'},
+            name='/v2/zones?name=*.com.')
+
+    def filter_domains_by_name_right_wildcard(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+        client.list_zones(
+            params={'name': 'rand*'},
+            name='/v2/zones?name=rand*')
+
+    def filter_domains_by_name_double_wildcard(self):
+        tenant = self.select_random_tenant()
+        if not tenant:
+            return
+        client = self.designate_client.as_user(tenant)
+        client.list_zones(
+            params={'name': '*zone*'},
+            name='/v2/zones?name=*zone*')
+
     def export_domain(self):
         """This runs the entire export domain sequence:
 
@@ -62,7 +90,6 @@ class ZoneTasks(BaseTaskSet):
             GreenletManager.get().tracked_greenlet,
             lambda: self._do_export_domain(),
         )
-
 
     def _do_export_domain(self):
         tenant = self.select_random_tenant()
